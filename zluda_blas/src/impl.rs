@@ -559,3 +559,41 @@ pub(crate) unsafe fn get_vector(
 ) -> rocblas_status {
     rocblas_get_vector(n, elem_size, x, incx, y, incy)
 }
+
+// BLAS Level 2 operations
+
+pub(crate) fn sgemv_v2(
+    handle: &Handle,
+    trans: rocblas_operation,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    alpha: *const f32,
+    a: *const f32,
+    lda: ::core::ffi::c_int,
+    x: *const f32,
+    incx: ::core::ffi::c_int,
+    beta: *const f32,
+    y: *mut f32,
+    incy: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_sgemv(handle.handle, trans, m, n, alpha, a, lda, x, incx, beta, y, incy) }?;
+    Ok(())
+}
+
+pub(crate) fn dgemv_v2(
+    handle: &Handle,
+    trans: rocblas_operation,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    alpha: *const f64,
+    a: *const f64,
+    lda: ::core::ffi::c_int,
+    x: *const f64,
+    incx: ::core::ffi::c_int,
+    beta: *const f64,
+    y: *mut f64,
+    incy: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_dgemv(handle.handle, trans, m, n, alpha, a, lda, x, incx, beta, y, incy) }?;
+    Ok(())
+}

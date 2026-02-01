@@ -52,6 +52,7 @@ cuda_macros::cublas_function_declarations!(
             cublasDestroy_v2,
             cublasDgemm_v2,
             cublasDgemmStridedBatched,
+            cublasDgemv_v2,
             cublasDscal_v2,
             cublasGemmBatchedEx,
             cublasGemmEx,
@@ -67,6 +68,7 @@ cuda_macros::cublas_function_declarations!(
             cublasSetVector,
             cublasSgemmStridedBatched,
             cublasSgemm_v2,
+            cublasSgemv_v2,
             cublasSscal_v2,
         ],
     implemented_and_always_succeeds
