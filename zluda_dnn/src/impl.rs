@@ -674,9 +674,237 @@ pub(crate) unsafe fn destroy_tensor_descriptor(desc: miopenTensorDescriptor_t) -
     miopenDestroyTensorDescriptor(desc)
 }
 
+// Activation descriptor wrapper
+pub(crate) struct ActivationDescriptor {
+    pub(crate) base: miopenActivationDescriptor_t,
+}
+
+impl ActivationDescriptor {
+    fn new() -> Self {
+        Self {
+            base: miopenActivationDescriptor_t(ptr::null_mut()),
+        }
+    }
+}
+
+impl ZludaObject for ActivationDescriptor {
+    const COOKIE: usize = 0x8a7c3f1e9d2b4065;
+
+    type Error = cudnnError_t;
+    type CudaHandle = cudnnActivationDescriptor_t;
+
+    fn drop_checked(&mut self) -> Result<(), cudnnError_t> {
+        if !self.base.0.is_null() {
+            unsafe { miopenDestroyActivationDescriptor(self.base) }
+                .map_err(|_| cudnnError_t::INTERNAL_ERROR)?;
+        }
+        Ok(())
+    }
+}
+
+from_cuda_object!(ActivationDescriptor);
+
+fn cudnn_to_miopen_activation_mode(
+    mode: cudnnActivationMode_t,
+) -> Result<miopenActivationMode_t, cudnnError_t> {
+    Ok(match mode {
+        cudnnActivationMode_t::CUDNN_ACTIVATION_SIGMOID => {
+            miopenActivationMode_t::miopenActivationLOGISTIC
+        }
+        cudnnActivationMode_t::CUDNN_ACTIVATION_RELU => {
+            miopenActivationMode_t::miopenActivationRELU
+        }
+        cudnnActivationMode_t::CUDNN_ACTIVATION_TANH => {
+            miopenActivationMode_t::miopenActivationTANH
+        }
+        cudnnActivationMode_t::CUDNN_ACTIVATION_CLIPPED_RELU => {
+            miopenActivationMode_t::miopenActivationCLIPPEDRELU
+        }
+        cudnnActivationMode_t::CUDNN_ACTIVATION_ELU => {
+            miopenActivationMode_t::miopenActivationELU
+        }
+        cudnnActivationMode_t::CUDNN_ACTIVATION_IDENTITY => {
+            miopenActivationMode_t::miopenActivationPASTHRU
+        }
+        cudnnActivationMode_t::CUDNN_ACTIVATION_SWISH => {
+            // MIOpen doesn't have direct Swish support, use SOFTRELU as approximation
+            miopenActivationMode_t::miopenActivationSOFTRELU
+        }
+        _ => return Err(cudnnError_t::NOT_SUPPORTED),
+    })
+}
+
+pub(crate) unsafe fn create_activation_descriptor(
+    activation_desc: *mut cudnnActivationDescriptor_t,
+) -> cudnnStatus_t {
+    if activation_desc.is_null() {
+        return Err(cudnnError_t::BAD_PARAM);
+    }
+    let mut desc = ActivationDescriptor::new();
+    miopenCreateActivationDescriptor(&mut desc.base)?;
+    *activation_desc = ActivationDescriptor::wrap(desc);
+    Ok(())
+}
+
+pub(crate) unsafe fn set_activation_descriptor(
+    activation_desc: cudnnActivationDescriptor_t,
+    mode: cudnnActivationMode_t,
+    _relu_nan_opt: cudnnNanPropagation_t,
+    coef: f64,
+) -> cudnnStatus_t {
+    // Get access to the descriptor through the live check
+    let live_check = zluda_common::as_ref::<ActivationDescriptor>(&activation_desc)
+        .ok_or(cudnnError_t::BAD_PARAM)?;
+    let desc = live_check.as_result()?;
+
+    let miopen_mode = cudnn_to_miopen_activation_mode(mode)?;
+
+    // MIOpen uses alpha for the coefficient (e.g., for clipped relu ceiling or leaky relu slope)
+    // beta and gamma are typically 0 for standard activations
+    // NaN propagation option is not directly supported by MIOpen
+    miopenSetActivationDescriptor(desc.base, miopen_mode, coef, 0.0, 0.0)?;
+    Ok(())
+}
+
+pub(crate) unsafe fn get_activation_descriptor(
+    activation_desc: cudnnActivationDescriptor_t,
+    mode: *mut cudnnActivationMode_t,
+    relu_nan_opt: *mut cudnnNanPropagation_t,
+    coef: *mut f64,
+) -> cudnnStatus_t {
+    let desc: &ActivationDescriptor = zluda_common::FromCuda::from_cuda(&activation_desc)?;
+
+    // Query MIOpen for the actual values
+    let mut miopen_mode = mem::zeroed();
+    let mut alpha = 0.0f64;
+    let mut beta = 0.0f64;
+    let mut gamma = 0.0f64;
+    miopenGetActivationDescriptor(desc.base, &mut miopen_mode, &mut alpha, &mut beta, &mut gamma)?;
+
+    if !mode.is_null() {
+        // Map MIOpen mode back to cuDNN mode
+        *mode = match miopen_mode {
+            miopenActivationMode_t::miopenActivationLOGISTIC => cudnnActivationMode_t::CUDNN_ACTIVATION_SIGMOID,
+            miopenActivationMode_t::miopenActivationRELU => cudnnActivationMode_t::CUDNN_ACTIVATION_RELU,
+            miopenActivationMode_t::miopenActivationTANH => cudnnActivationMode_t::CUDNN_ACTIVATION_TANH,
+            miopenActivationMode_t::miopenActivationCLIPPEDRELU => cudnnActivationMode_t::CUDNN_ACTIVATION_CLIPPED_RELU,
+            miopenActivationMode_t::miopenActivationELU => cudnnActivationMode_t::CUDNN_ACTIVATION_ELU,
+            miopenActivationMode_t::miopenActivationPASTHRU => cudnnActivationMode_t::CUDNN_ACTIVATION_IDENTITY,
+            miopenActivationMode_t::miopenActivationSOFTRELU => cudnnActivationMode_t::CUDNN_ACTIVATION_SWISH,
+            _ => cudnnActivationMode_t::CUDNN_ACTIVATION_RELU,
+        };
+    }
+    if !relu_nan_opt.is_null() {
+        *relu_nan_opt = cudnnNanPropagation_t::CUDNN_NOT_PROPAGATE_NAN;
+    }
+    if !coef.is_null() {
+        *coef = alpha;
+    }
+    Ok(())
+}
+
+pub(crate) unsafe fn destroy_activation_descriptor(
+    activation_desc: cudnnActivationDescriptor_t,
+) -> cudnnStatus_t {
+    zluda_common::drop_checked::<ActivationDescriptor>(activation_desc)?;
+    Ok(())
+}
+
+pub(crate) unsafe fn activation_forward(
+    handle: cudnnHandle_t,
+    activation_desc: cudnnActivationDescriptor_t,
+    alpha: *const ::std::os::raw::c_void,
+    x_desc: cudnnTensorDescriptor_t,
+    x: *const ::std::os::raw::c_void,
+    beta: *const ::std::os::raw::c_void,
+    y_desc: cudnnTensorDescriptor_t,
+    y: *mut ::std::os::raw::c_void,
+) -> cudnnStatus_t {
+    let ctx: &Context = zluda_common::FromCuda::from_cuda(&handle)?;
+    let act_desc: &ActivationDescriptor = zluda_common::FromCuda::from_cuda(&activation_desc)?;
+    miopenActivationForward(
+        ctx.base,
+        act_desc.base,
+        alpha,
+        miopenTensorDescriptor_t(x_desc as *mut _),
+        x,
+        beta,
+        miopenTensorDescriptor_t(y_desc as *mut _),
+        y,
+    )?;
+    Ok(())
+}
+
 pub mod dnn8 {
     use cuda_types::cudnn8::*;
     use std::mem;
+
+    pub(crate) unsafe fn create_activation_descriptor(
+        activation_desc: *mut cudnnActivationDescriptor_t,
+    ) -> cudnnStatus_t {
+        // The descriptor types are pointer-sized and compatible between versions
+        status9_to_8(super::dnn9::create_activation_descriptor(
+            activation_desc as *mut cuda_types::cudnn9::cudnnActivationDescriptor_t,
+        ))
+    }
+
+    pub(crate) unsafe fn set_activation_descriptor(
+        activation_desc: cudnnActivationDescriptor_t,
+        mode: cudnnActivationMode_t,
+        relu_nan_opt: cudnnNanPropagation_t,
+        coef: f64,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::set_activation_descriptor(
+            activation_desc as cuda_types::cudnn9::cudnnActivationDescriptor_t,
+            mem::transmute(mode),
+            mem::transmute(relu_nan_opt),
+            coef,
+        ))
+    }
+
+    pub(crate) unsafe fn get_activation_descriptor(
+        activation_desc: cudnnActivationDescriptor_t,
+        mode: *mut cudnnActivationMode_t,
+        relu_nan_opt: *mut cudnnNanPropagation_t,
+        coef: *mut f64,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::get_activation_descriptor(
+            activation_desc as cuda_types::cudnn9::cudnnActivationDescriptor_t,
+            mode as *mut cuda_types::cudnn9::cudnnActivationMode_t,
+            relu_nan_opt as *mut cuda_types::cudnn9::cudnnNanPropagation_t,
+            coef,
+        ))
+    }
+
+    pub(crate) unsafe fn destroy_activation_descriptor(
+        activation_desc: cudnnActivationDescriptor_t,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::destroy_activation_descriptor(
+            activation_desc as cuda_types::cudnn9::cudnnActivationDescriptor_t,
+        ))
+    }
+
+    pub(crate) unsafe fn activation_forward(
+        handle: cudnnHandle_t,
+        activation_desc: cudnnActivationDescriptor_t,
+        alpha: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::activation_forward(
+            handle as cuda_types::cudnn9::cudnnHandle_t,
+            activation_desc as cuda_types::cudnn9::cudnnActivationDescriptor_t,
+            alpha,
+            x_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            x,
+            beta,
+            y_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            y,
+        ))
+    }
 
     pub(crate) fn get_error_string(
         status: cuda_types::cudnn8::cudnnStatus_t,
@@ -830,6 +1058,49 @@ pub mod dnn8 {
 pub mod dnn9 {
     use cuda_types::cudnn9::*;
     use zluda_common::FromCuda;
+
+    pub(crate) unsafe fn create_activation_descriptor(
+        activation_desc: *mut cudnnActivationDescriptor_t,
+    ) -> cudnnStatus_t {
+        super::create_activation_descriptor(activation_desc)
+    }
+
+    pub(crate) unsafe fn set_activation_descriptor(
+        activation_desc: cudnnActivationDescriptor_t,
+        mode: cudnnActivationMode_t,
+        relu_nan_opt: cudnnNanPropagation_t,
+        coef: f64,
+    ) -> cudnnStatus_t {
+        super::set_activation_descriptor(activation_desc, mode, relu_nan_opt, coef)
+    }
+
+    pub(crate) unsafe fn get_activation_descriptor(
+        activation_desc: cudnnActivationDescriptor_t,
+        mode: *mut cudnnActivationMode_t,
+        relu_nan_opt: *mut cudnnNanPropagation_t,
+        coef: *mut f64,
+    ) -> cudnnStatus_t {
+        super::get_activation_descriptor(activation_desc, mode, relu_nan_opt, coef)
+    }
+
+    pub(crate) unsafe fn destroy_activation_descriptor(
+        activation_desc: cudnnActivationDescriptor_t,
+    ) -> cudnnStatus_t {
+        super::destroy_activation_descriptor(activation_desc)
+    }
+
+    pub(crate) unsafe fn activation_forward(
+        handle: cudnnHandle_t,
+        activation_desc: cudnnActivationDescriptor_t,
+        alpha: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        super::activation_forward(handle, activation_desc, alpha, x_desc, x, beta, y_desc, y)
+    }
 
     pub(crate) fn get_error_string(status: cudnnStatus_t) -> *const ::core::ffi::c_char {
         match status {

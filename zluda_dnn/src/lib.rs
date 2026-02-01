@@ -80,8 +80,13 @@ macro_rules! dual_function_declarations {
 dual_function_declarations! {
     unimplemented,
     (implemented_dnn8|implemented_dnn9) <= [
+        cudnnActivationForward,
+        cudnnCreateActivationDescriptor,
+        cudnnDestroyActivationDescriptor,
+        cudnnGetActivationDescriptor,
+        cudnnGetConvolutionForwardAlgorithm_v7,
         cudnnGetErrorString,
-        cudnnGetConvolutionForwardAlgorithm_v7
+        cudnnSetActivationDescriptor
     ],
     implemented_no_conversion <= [
         cudnnGetVersion,
