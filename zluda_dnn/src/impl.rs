@@ -199,16 +199,24 @@ pub(crate) fn unimplemented() -> cudnnStatus_t {
 }
 
 pub(crate) fn get_version() -> usize {
-    todo!()
+    // Return cuDNN version 9.13.1
+    cuda_types::cudnn9::CUDNN_VERSION as usize
 }
 pub(crate) fn get_max_device_version() -> usize {
-    todo!()
+    // Return maximum supported cuDNN version (same as library version)
+    cuda_types::cudnn9::CUDNN_VERSION as usize
 }
 pub(crate) fn get_cudart_version() -> usize {
-    todo!()
+    // Return CUDA runtime version matching the driver (CUDA 13.0)
+    cuda_types::cuda::CUDA_VERSION as usize
 }
-pub(crate) fn get_last_error_string(_message: *mut ::core::ffi::c_char, _max_size: usize) -> () {
-    todo!()
+pub(crate) fn get_last_error_string(message: *mut ::core::ffi::c_char, max_size: usize) -> () {
+    // Write empty string - we don't track last error currently
+    if !message.is_null() && max_size > 0 {
+        unsafe {
+            *message = 0;
+        }
+    }
 }
 
 pub(crate) unsafe fn create(handle: &mut cudnnHandle_t) -> miopenStatus_t {
@@ -823,8 +831,26 @@ pub mod dnn9 {
     use cuda_types::cudnn9::*;
     use zluda_common::FromCuda;
 
-    pub(crate) fn get_error_string(_status: cudnnStatus_t) -> *const ::core::ffi::c_char {
-        todo!()
+    pub(crate) fn get_error_string(status: cudnnStatus_t) -> *const ::core::ffi::c_char {
+        match status {
+            Ok(()) => "CUDNN_STATUS_SUCCESS\0",
+            Err(cudnnError_t::NOT_INITIALIZED) => "CUDNN_STATUS_NOT_INITIALIZED\0",
+            Err(cudnnError_t::ALLOC_FAILED) => "CUDNN_STATUS_ALLOC_FAILED\0",
+            Err(cudnnError_t::BAD_PARAM) => "CUDNN_STATUS_BAD_PARAM\0",
+            Err(cudnnError_t::INTERNAL_ERROR) => "CUDNN_STATUS_INTERNAL_ERROR\0",
+            Err(cudnnError_t::INVALID_VALUE) => "CUDNN_STATUS_INVALID_VALUE\0",
+            Err(cudnnError_t::ARCH_MISMATCH) => "CUDNN_STATUS_ARCH_MISMATCH\0",
+            Err(cudnnError_t::MAPPING_ERROR) => "CUDNN_STATUS_MAPPING_ERROR\0",
+            Err(cudnnError_t::EXECUTION_FAILED) => "CUDNN_STATUS_EXECUTION_FAILED\0",
+            Err(cudnnError_t::NOT_SUPPORTED) => "CUDNN_STATUS_NOT_SUPPORTED\0",
+            Err(cudnnError_t::LICENSE_ERROR) => "CUDNN_STATUS_LICENSE_ERROR\0",
+            Err(cudnnError_t::RUNTIME_PREREQUISITE_MISSING) => "CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING\0",
+            Err(cudnnError_t::RUNTIME_IN_PROGRESS) => "CUDNN_STATUS_RUNTIME_IN_PROGRESS\0",
+            Err(cudnnError_t::RUNTIME_FP_OVERFLOW) => "CUDNN_STATUS_RUNTIME_FP_OVERFLOW\0",
+            Err(cudnnError_t::VERSION_MISMATCH) => "CUDNN_STATUS_VERSION_MISMATCH\0",
+            _ => "CUDNN_STATUS_UNKNOWN\0",
+        }
+        .as_ptr() as *const ::core::ffi::c_char
     }
 
     pub(crate) unsafe fn get_convolution_forward_algorithm_v7(
