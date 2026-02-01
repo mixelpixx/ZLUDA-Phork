@@ -153,6 +153,8 @@ cuda_macros::cuda_function_declarations!(
             cuMemcpyHtoD_v2,
             cuMemcpyHtoD_v2_ptds,
             cuMemsetD32_v2,
+            cuMemsetD16Async,
+            cuMemsetD32Async,
             cuMemsetD8Async,
             cuMemsetD8_v2,
             cuModuleGetFunction,

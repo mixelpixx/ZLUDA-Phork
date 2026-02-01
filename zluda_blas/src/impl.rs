@@ -184,6 +184,88 @@ pub(crate) fn sgemm_v2(
     Ok(())
 }
 
+pub(crate) fn dgemm_v2(
+    handle: &Handle,
+    transa: rocblas_operation,
+    transb: rocblas_operation,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    k: ::core::ffi::c_int,
+    alpha: *const f64,
+    a: *const f64,
+    lda: ::core::ffi::c_int,
+    b: *const f64,
+    ldb: ::core::ffi::c_int,
+    beta: *const f64,
+    c: *mut f64,
+    ldc: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe {
+        rocblas_dgemm(
+            handle.handle,
+            transa,
+            transb,
+            m,
+            n,
+            k,
+            alpha,
+            a,
+            lda,
+            b,
+            ldb,
+            beta,
+            c,
+            ldc,
+        )
+    }?;
+    Ok(())
+}
+
+pub(crate) fn dgemm_strided_batched(
+    handle: &Handle,
+    transa: rocblas_operation,
+    transb: rocblas_operation,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    k: ::core::ffi::c_int,
+    alpha: *const f64,
+    a: *const f64,
+    lda: ::core::ffi::c_int,
+    stride_a: ::core::ffi::c_longlong,
+    b: *const f64,
+    ldb: ::core::ffi::c_int,
+    stride_b: ::core::ffi::c_longlong,
+    beta: *const f64,
+    c: *mut f64,
+    ldc: ::core::ffi::c_int,
+    stride_c: ::core::ffi::c_longlong,
+    batch_count: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe {
+        rocblas_dgemm_strided_batched(
+            handle.handle,
+            transa,
+            transb,
+            m,
+            n,
+            k,
+            alpha,
+            a,
+            lda,
+            stride_a,
+            b,
+            ldb,
+            stride_b,
+            beta,
+            c,
+            ldc,
+            stride_c,
+            batch_count,
+        )
+    }?;
+    Ok(())
+}
+
 pub(crate) fn destroy_v2(handle: cublasHandle_t) -> cublasStatus_t {
     zluda_common::drop_checked::<Handle>(handle)
 }
@@ -415,6 +497,56 @@ pub(crate) unsafe fn set_vector(
     incy: ::core::ffi::c_int,
 ) -> rocblas_status {
     rocblas_set_vector(n, elem_size, x, incx, device_ptr, incy)
+}
+
+// BLAS Level 1 operations
+
+pub(crate) fn sscal_v2(
+    handle: &Handle,
+    n: ::core::ffi::c_int,
+    alpha: *const f32,
+    x: *mut f32,
+    incx: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_sscal(handle.handle, n, alpha, x, incx) }?;
+    Ok(())
+}
+
+pub(crate) fn dscal_v2(
+    handle: &Handle,
+    n: ::core::ffi::c_int,
+    alpha: *const f64,
+    x: *mut f64,
+    incx: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_dscal(handle.handle, n, alpha, x, incx) }?;
+    Ok(())
+}
+
+pub(crate) fn saxpy_v2(
+    handle: &Handle,
+    n: ::core::ffi::c_int,
+    alpha: *const f32,
+    x: *const f32,
+    incx: ::core::ffi::c_int,
+    y: *mut f32,
+    incy: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_saxpy(handle.handle, n, alpha, x, incx, y, incy) }?;
+    Ok(())
+}
+
+pub(crate) fn daxpy_v2(
+    handle: &Handle,
+    n: ::core::ffi::c_int,
+    alpha: *const f64,
+    x: *const f64,
+    incx: ::core::ffi::c_int,
+    y: *mut f64,
+    incy: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_daxpy(handle.handle, n, alpha, x, incx, y, incy) }?;
+    Ok(())
 }
 
 pub(crate) unsafe fn get_vector(

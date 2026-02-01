@@ -205,6 +205,24 @@ pub(crate) unsafe fn set_d8_async(
     hipMemsetD8Async(dst_device, uc, n, stream)
 }
 
+pub(crate) unsafe fn set_d16_async(
+    dst_device: hipDeviceptr_t,
+    us: ::core::ffi::c_ushort,
+    n: usize,
+    stream: hipStream_t,
+) -> hipError_t {
+    hipMemsetD16Async(dst_device, us, n, stream)
+}
+
+pub(crate) unsafe fn set_d32_async(
+    dst_device: hipDeviceptr_t,
+    ui: ::core::ffi::c_uint,
+    n: usize,
+    stream: hipStream_t,
+) -> hipError_t {
+    hipMemsetD32Async(dst_device, ui as ::core::ffi::c_int, n, stream)
+}
+
 pub(crate) fn get_allocation_granularity(
     _granularity: &mut usize,
     _property: &cuda_types::cuda::CUmemAllocationProp,

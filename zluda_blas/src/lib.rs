@@ -48,13 +48,18 @@ cuda_macros::cublas_function_declarations!(
     implemented
         <= [
             cublasCreate_v2,
+            cublasDaxpy_v2,
             cublasDestroy_v2,
+            cublasDgemm_v2,
+            cublasDgemmStridedBatched,
+            cublasDscal_v2,
             cublasGemmBatchedEx,
             cublasGemmEx,
             cublasGemmStridedBatchedEx,
             cublasGetMathMode,
             cublasGetVector,
             cublasHgemm,
+            cublasSaxpy_v2,
             cublasSetMathMode,
             cublasSetPointerMode_v2,
             cublasSetStream_v2,
@@ -62,6 +67,7 @@ cuda_macros::cublas_function_declarations!(
             cublasSetVector,
             cublasSgemmStridedBatched,
             cublasSgemm_v2,
+            cublasSscal_v2,
         ],
     implemented_and_always_succeeds
         <= [
