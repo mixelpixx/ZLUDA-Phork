@@ -906,6 +906,92 @@ pub mod dnn8 {
         ))
     }
 
+    pub(crate) unsafe fn create_pooling_descriptor(
+        pooling_desc: *mut cudnnPoolingDescriptor_t,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::create_pooling_descriptor(
+            pooling_desc as *mut cuda_types::cudnn9::cudnnPoolingDescriptor_t,
+        ))
+    }
+
+    pub(crate) unsafe fn set_pooling2d_descriptor(
+        pooling_desc: cudnnPoolingDescriptor_t,
+        mode: cudnnPoolingMode_t,
+        maxpooling_nan_opt: cudnnNanPropagation_t,
+        window_height: ::std::os::raw::c_int,
+        window_width: ::std::os::raw::c_int,
+        vertical_padding: ::std::os::raw::c_int,
+        horizontal_padding: ::std::os::raw::c_int,
+        vertical_stride: ::std::os::raw::c_int,
+        horizontal_stride: ::std::os::raw::c_int,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::set_pooling2d_descriptor(
+            pooling_desc as cuda_types::cudnn9::cudnnPoolingDescriptor_t,
+            mem::transmute(mode),
+            mem::transmute(maxpooling_nan_opt),
+            window_height,
+            window_width,
+            vertical_padding,
+            horizontal_padding,
+            vertical_stride,
+            horizontal_stride,
+        ))
+    }
+
+    pub(crate) unsafe fn get_pooling2d_descriptor(
+        pooling_desc: cudnnPoolingDescriptor_t,
+        mode: *mut cudnnPoolingMode_t,
+        maxpooling_nan_opt: *mut cudnnNanPropagation_t,
+        window_height: *mut ::std::os::raw::c_int,
+        window_width: *mut ::std::os::raw::c_int,
+        vertical_padding: *mut ::std::os::raw::c_int,
+        horizontal_padding: *mut ::std::os::raw::c_int,
+        vertical_stride: *mut ::std::os::raw::c_int,
+        horizontal_stride: *mut ::std::os::raw::c_int,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::get_pooling2d_descriptor(
+            pooling_desc as cuda_types::cudnn9::cudnnPoolingDescriptor_t,
+            mode as *mut cuda_types::cudnn9::cudnnPoolingMode_t,
+            maxpooling_nan_opt as *mut cuda_types::cudnn9::cudnnNanPropagation_t,
+            window_height,
+            window_width,
+            vertical_padding,
+            horizontal_padding,
+            vertical_stride,
+            horizontal_stride,
+        ))
+    }
+
+    pub(crate) unsafe fn destroy_pooling_descriptor(
+        pooling_desc: cudnnPoolingDescriptor_t,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::destroy_pooling_descriptor(
+            pooling_desc as cuda_types::cudnn9::cudnnPoolingDescriptor_t,
+        ))
+    }
+
+    pub(crate) unsafe fn pooling_forward(
+        handle: cudnnHandle_t,
+        pooling_desc: cudnnPoolingDescriptor_t,
+        alpha: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::pooling_forward(
+            handle as cuda_types::cudnn9::cudnnHandle_t,
+            pooling_desc as cuda_types::cudnn9::cudnnPoolingDescriptor_t,
+            alpha,
+            x_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            x,
+            beta,
+            y_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            y,
+        ))
+    }
+
     pub(crate) fn get_error_string(
         status: cuda_types::cudnn8::cudnnStatus_t,
     ) -> *const ::core::ffi::c_char {
@@ -1055,6 +1141,182 @@ pub mod dnn8 {
     }
 }
 
+// Pooling descriptor wrapper
+pub(crate) struct PoolingDescriptor {
+    pub(crate) base: miopenPoolingDescriptor_t,
+}
+
+impl PoolingDescriptor {
+    fn new() -> Self {
+        Self {
+            base: miopenPoolingDescriptor_t(ptr::null_mut()),
+        }
+    }
+}
+
+impl ZludaObject for PoolingDescriptor {
+    const COOKIE: usize = 0x3b2c1a4d5e6f7089;
+
+    type Error = cudnnError_t;
+    type CudaHandle = cudnnPoolingDescriptor_t;
+
+    fn drop_checked(&mut self) -> Result<(), cudnnError_t> {
+        if !self.base.0.is_null() {
+            unsafe { miopenDestroyPoolingDescriptor(self.base) }
+                .map_err(|_| cudnnError_t::INTERNAL_ERROR)?;
+        }
+        Ok(())
+    }
+}
+
+from_cuda_object!(PoolingDescriptor);
+
+fn cudnn_to_miopen_pooling_mode(
+    mode: cudnnPoolingMode_t,
+) -> Result<miopenPoolingMode_t, cudnnError_t> {
+    Ok(match mode {
+        cudnnPoolingMode_t::CUDNN_POOLING_MAX => miopenPoolingMode_t::miopenPoolingMax,
+        cudnnPoolingMode_t::CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING => {
+            miopenPoolingMode_t::miopenPoolingAverageInclusive
+        }
+        cudnnPoolingMode_t::CUDNN_POOLING_AVERAGE_COUNT_EXCLUDE_PADDING => {
+            miopenPoolingMode_t::miopenPoolingAverage
+        }
+        cudnnPoolingMode_t::CUDNN_POOLING_MAX_DETERMINISTIC => {
+            // MIOpen doesn't have a deterministic variant, use regular max pooling
+            miopenPoolingMode_t::miopenPoolingMax
+        }
+        _ => return Err(cudnnError_t::NOT_SUPPORTED),
+    })
+}
+
+fn miopen_to_cudnn_pooling_mode(mode: miopenPoolingMode_t) -> cudnnPoolingMode_t {
+    match mode {
+        miopenPoolingMode_t::miopenPoolingMax => cudnnPoolingMode_t::CUDNN_POOLING_MAX,
+        miopenPoolingMode_t::miopenPoolingAverageInclusive => {
+            cudnnPoolingMode_t::CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING
+        }
+        miopenPoolingMode_t::miopenPoolingAverage => {
+            cudnnPoolingMode_t::CUDNN_POOLING_AVERAGE_COUNT_EXCLUDE_PADDING
+        }
+        _ => cudnnPoolingMode_t::CUDNN_POOLING_MAX,
+    }
+}
+
+pub(crate) unsafe fn create_pooling_descriptor(
+    pooling_desc: *mut cudnnPoolingDescriptor_t,
+) -> cudnnStatus_t {
+    if pooling_desc.is_null() {
+        return Err(cudnnError_t::BAD_PARAM);
+    }
+    let mut desc = PoolingDescriptor::new();
+    miopenCreatePoolingDescriptor(&mut desc.base)?;
+    *pooling_desc = PoolingDescriptor::wrap(desc);
+    Ok(())
+}
+
+pub(crate) unsafe fn set_pooling2d_descriptor(
+    pooling_desc: cudnnPoolingDescriptor_t,
+    mode: cudnnPoolingMode_t,
+    _maxpooling_nan_opt: cudnnNanPropagation_t,
+    window_height: ::std::os::raw::c_int,
+    window_width: ::std::os::raw::c_int,
+    vertical_padding: ::std::os::raw::c_int,
+    horizontal_padding: ::std::os::raw::c_int,
+    vertical_stride: ::std::os::raw::c_int,
+    horizontal_stride: ::std::os::raw::c_int,
+) -> cudnnStatus_t {
+    let desc: &PoolingDescriptor = zluda_common::FromCuda::from_cuda(&pooling_desc)?;
+
+    let miopen_mode = cudnn_to_miopen_pooling_mode(mode)?;
+
+    // NaN propagation option is not supported by MIOpen, ignored
+    miopenSet2dPoolingDescriptor(
+        desc.base,
+        miopen_mode,
+        window_height,
+        window_width,
+        vertical_padding,
+        horizontal_padding,
+        vertical_stride,
+        horizontal_stride,
+    )?;
+    Ok(())
+}
+
+pub(crate) unsafe fn get_pooling2d_descriptor(
+    pooling_desc: cudnnPoolingDescriptor_t,
+    mode: *mut cudnnPoolingMode_t,
+    maxpooling_nan_opt: *mut cudnnNanPropagation_t,
+    window_height: *mut ::std::os::raw::c_int,
+    window_width: *mut ::std::os::raw::c_int,
+    vertical_padding: *mut ::std::os::raw::c_int,
+    horizontal_padding: *mut ::std::os::raw::c_int,
+    vertical_stride: *mut ::std::os::raw::c_int,
+    horizontal_stride: *mut ::std::os::raw::c_int,
+) -> cudnnStatus_t {
+    let desc: &PoolingDescriptor = zluda_common::FromCuda::from_cuda(&pooling_desc)?;
+
+    let mut miopen_mode = mem::zeroed();
+    miopenGet2dPoolingDescriptor(
+        desc.base,
+        &mut miopen_mode,
+        window_height,
+        window_width,
+        vertical_padding,
+        horizontal_padding,
+        vertical_stride,
+        horizontal_stride,
+    )?;
+
+    if !mode.is_null() {
+        *mode = miopen_to_cudnn_pooling_mode(miopen_mode);
+    }
+    if !maxpooling_nan_opt.is_null() {
+        // MIOpen doesn't track NaN propagation, return default
+        *maxpooling_nan_opt = cudnnNanPropagation_t::CUDNN_NOT_PROPAGATE_NAN;
+    }
+    Ok(())
+}
+
+pub(crate) unsafe fn destroy_pooling_descriptor(
+    pooling_desc: cudnnPoolingDescriptor_t,
+) -> cudnnStatus_t {
+    zluda_common::drop_checked::<PoolingDescriptor>(pooling_desc)?;
+    Ok(())
+}
+
+pub(crate) unsafe fn pooling_forward(
+    handle: cudnnHandle_t,
+    pooling_desc: cudnnPoolingDescriptor_t,
+    alpha: *const ::std::os::raw::c_void,
+    x_desc: cudnnTensorDescriptor_t,
+    x: *const ::std::os::raw::c_void,
+    beta: *const ::std::os::raw::c_void,
+    y_desc: cudnnTensorDescriptor_t,
+    y: *mut ::std::os::raw::c_void,
+) -> cudnnStatus_t {
+    let ctx: &Context = zluda_common::FromCuda::from_cuda(&handle)?;
+    let pool_desc: &PoolingDescriptor = zluda_common::FromCuda::from_cuda(&pooling_desc)?;
+
+    // Call MIOpen pooling forward
+    // do_backward=false, workSpace=null, workSpaceSize=0 for forward-only
+    miopenPoolingForward(
+        ctx.base,
+        pool_desc.base,
+        alpha,
+        miopenTensorDescriptor_t(x_desc as *mut _),
+        x,
+        beta,
+        miopenTensorDescriptor_t(y_desc as *mut _),
+        y,
+        false, // do_backward
+        ptr::null_mut(),
+        0,
+    )?;
+    Ok(())
+}
+
 pub mod dnn9 {
     use cuda_types::cudnn9::*;
     use zluda_common::FromCuda;
@@ -1100,6 +1362,79 @@ pub mod dnn9 {
         y: *mut ::std::os::raw::c_void,
     ) -> cudnnStatus_t {
         super::activation_forward(handle, activation_desc, alpha, x_desc, x, beta, y_desc, y)
+    }
+
+    pub(crate) unsafe fn create_pooling_descriptor(
+        pooling_desc: *mut cudnnPoolingDescriptor_t,
+    ) -> cudnnStatus_t {
+        super::create_pooling_descriptor(pooling_desc)
+    }
+
+    pub(crate) unsafe fn set_pooling2d_descriptor(
+        pooling_desc: cudnnPoolingDescriptor_t,
+        mode: cudnnPoolingMode_t,
+        maxpooling_nan_opt: cudnnNanPropagation_t,
+        window_height: ::std::os::raw::c_int,
+        window_width: ::std::os::raw::c_int,
+        vertical_padding: ::std::os::raw::c_int,
+        horizontal_padding: ::std::os::raw::c_int,
+        vertical_stride: ::std::os::raw::c_int,
+        horizontal_stride: ::std::os::raw::c_int,
+    ) -> cudnnStatus_t {
+        super::set_pooling2d_descriptor(
+            pooling_desc,
+            mode,
+            maxpooling_nan_opt,
+            window_height,
+            window_width,
+            vertical_padding,
+            horizontal_padding,
+            vertical_stride,
+            horizontal_stride,
+        )
+    }
+
+    pub(crate) unsafe fn get_pooling2d_descriptor(
+        pooling_desc: cudnnPoolingDescriptor_t,
+        mode: *mut cudnnPoolingMode_t,
+        maxpooling_nan_opt: *mut cudnnNanPropagation_t,
+        window_height: *mut ::std::os::raw::c_int,
+        window_width: *mut ::std::os::raw::c_int,
+        vertical_padding: *mut ::std::os::raw::c_int,
+        horizontal_padding: *mut ::std::os::raw::c_int,
+        vertical_stride: *mut ::std::os::raw::c_int,
+        horizontal_stride: *mut ::std::os::raw::c_int,
+    ) -> cudnnStatus_t {
+        super::get_pooling2d_descriptor(
+            pooling_desc,
+            mode,
+            maxpooling_nan_opt,
+            window_height,
+            window_width,
+            vertical_padding,
+            horizontal_padding,
+            vertical_stride,
+            horizontal_stride,
+        )
+    }
+
+    pub(crate) unsafe fn destroy_pooling_descriptor(
+        pooling_desc: cudnnPoolingDescriptor_t,
+    ) -> cudnnStatus_t {
+        super::destroy_pooling_descriptor(pooling_desc)
+    }
+
+    pub(crate) unsafe fn pooling_forward(
+        handle: cudnnHandle_t,
+        pooling_desc: cudnnPoolingDescriptor_t,
+        alpha: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        super::pooling_forward(handle, pooling_desc, alpha, x_desc, x, beta, y_desc, y)
     }
 
     pub(crate) fn get_error_string(status: cudnnStatus_t) -> *const ::core::ffi::c_char {

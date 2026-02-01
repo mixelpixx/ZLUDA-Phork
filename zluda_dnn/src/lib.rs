@@ -82,11 +82,16 @@ dual_function_declarations! {
     (implemented_dnn8|implemented_dnn9) <= [
         cudnnActivationForward,
         cudnnCreateActivationDescriptor,
+        cudnnCreatePoolingDescriptor,
         cudnnDestroyActivationDescriptor,
+        cudnnDestroyPoolingDescriptor,
         cudnnGetActivationDescriptor,
         cudnnGetConvolutionForwardAlgorithm_v7,
         cudnnGetErrorString,
-        cudnnSetActivationDescriptor
+        cudnnGetPooling2dDescriptor,
+        cudnnPoolingForward,
+        cudnnSetActivationDescriptor,
+        cudnnSetPooling2dDescriptor
     ],
     implemented_no_conversion <= [
         cudnnGetVersion,
