@@ -178,13 +178,18 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
     }
 
     unsafe extern "system" fn get_module_from_cubin_ext1(
-        _result: *mut cuda_types::cuda::CUmodule,
-        _fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
+        result: *mut cuda_types::cuda::CUmodule,
+        fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
         _arg3: *mut std::ffi::c_void,
         _arg4: *mut std::ffi::c_void,
         _arg5: u32,
     ) -> cuda_types::cuda::CUresult {
-        Err(r#impl::unimplemented())
+        if result.is_null() || fatbinc_wrapper.is_null() {
+            return CUresult::ERROR_INVALID_VALUE;
+        }
+        let result = &mut *result;
+        let image = &*(fatbinc_wrapper as *const c_void);
+        r#impl::module::load_data(result, image)
     }
 
     unsafe extern "system" fn cudart_interface_fn7(_arg1: usize) -> cuda_types::cuda::CUresult {
