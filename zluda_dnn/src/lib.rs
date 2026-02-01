@@ -81,8 +81,10 @@ dual_function_declarations! {
     unimplemented,
     (implemented_dnn8|implemented_dnn9) <= [
         cudnnActivationForward,
+        cudnnBatchNormalizationForwardInference,
         cudnnCreateActivationDescriptor,
         cudnnCreatePoolingDescriptor,
+        cudnnDeriveBNTensorDescriptor,
         cudnnDestroyActivationDescriptor,
         cudnnDestroyPoolingDescriptor,
         cudnnGetActivationDescriptor,
@@ -91,7 +93,8 @@ dual_function_declarations! {
         cudnnGetPooling2dDescriptor,
         cudnnPoolingForward,
         cudnnSetActivationDescriptor,
-        cudnnSetPooling2dDescriptor
+        cudnnSetPooling2dDescriptor,
+        cudnnSoftmaxForward
     ],
     implemented_no_conversion <= [
         cudnnGetVersion,

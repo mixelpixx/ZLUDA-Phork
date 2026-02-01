@@ -992,6 +992,76 @@ pub mod dnn8 {
         ))
     }
 
+    pub(crate) unsafe fn softmax_forward(
+        handle: cudnnHandle_t,
+        algo: cudnnSoftmaxAlgorithm_t,
+        mode: cudnnSoftmaxMode_t,
+        alpha: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::softmax_forward(
+            handle as cuda_types::cudnn9::cudnnHandle_t,
+            mem::transmute(algo),
+            mem::transmute(mode),
+            alpha,
+            x_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            x,
+            beta,
+            y_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            y,
+        ))
+    }
+
+    pub(crate) unsafe fn derive_b_n_tensor_descriptor(
+        derived_bn_desc: cudnnTensorDescriptor_t,
+        x_desc: cudnnTensorDescriptor_t,
+        mode: cudnnBatchNormMode_t,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::derive_b_n_tensor_descriptor(
+            derived_bn_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            x_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            mem::transmute(mode),
+        ))
+    }
+
+    pub(crate) unsafe fn batch_normalization_forward_inference(
+        handle: cudnnHandle_t,
+        mode: cudnnBatchNormMode_t,
+        alpha: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *mut ::std::os::raw::c_void,
+        bn_scale_bias_mean_var_desc: cudnnTensorDescriptor_t,
+        bn_scale: *const ::std::os::raw::c_void,
+        bn_bias: *const ::std::os::raw::c_void,
+        estimated_mean: *const ::std::os::raw::c_void,
+        estimated_variance: *const ::std::os::raw::c_void,
+        epsilon: f64,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::batch_normalization_forward_inference(
+            handle as cuda_types::cudnn9::cudnnHandle_t,
+            mem::transmute(mode),
+            alpha,
+            beta,
+            x_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            x,
+            y_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            y,
+            bn_scale_bias_mean_var_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            bn_scale,
+            bn_bias,
+            estimated_mean,
+            estimated_variance,
+            epsilon,
+        ))
+    }
+
     pub(crate) fn get_error_string(
         status: cuda_types::cudnn8::cudnnStatus_t,
     ) -> *const ::core::ffi::c_char {
@@ -1317,6 +1387,107 @@ pub(crate) unsafe fn pooling_forward(
     Ok(())
 }
 
+pub(crate) unsafe fn softmax_forward(
+    handle: cudnnHandle_t,
+    algo: cudnnSoftmaxAlgorithm_t,
+    mode: cudnnSoftmaxMode_t,
+    alpha: *const ::std::os::raw::c_void,
+    x_desc: cudnnTensorDescriptor_t,
+    x: *const ::std::os::raw::c_void,
+    beta: *const ::std::os::raw::c_void,
+    y_desc: cudnnTensorDescriptor_t,
+    y: *mut ::std::os::raw::c_void,
+) -> cudnnStatus_t {
+    let ctx: &Context = zluda_common::FromCuda::from_cuda(&handle)?;
+
+    // Map cuDNN algorithm to MIOpen (values are identical)
+    let miopen_algo = miopenSoftmaxAlgorithm_t(algo.0);
+    let miopen_mode = miopenSoftmaxMode_t(mode.0);
+
+    miopenSoftmaxForward_V2(
+        ctx.base,
+        alpha,
+        miopenTensorDescriptor_t(x_desc as *mut _),
+        x,
+        beta,
+        miopenTensorDescriptor_t(y_desc as *mut _),
+        y,
+        miopen_algo,
+        miopen_mode,
+    )?;
+    Ok(())
+}
+
+fn cudnn_to_miopen_batchnorm_mode(
+    mode: cudnnBatchNormMode_t,
+) -> Result<miopenBatchNormMode_t, cudnnError_t> {
+    Ok(match mode {
+        cudnnBatchNormMode_t::CUDNN_BATCHNORM_PER_ACTIVATION => {
+            miopenBatchNormMode_t::miopenBNPerActivation
+        }
+        cudnnBatchNormMode_t::CUDNN_BATCHNORM_SPATIAL
+        | cudnnBatchNormMode_t::CUDNN_BATCHNORM_SPATIAL_PERSISTENT => {
+            // MIOpen doesn't have a persistent variant, use regular spatial
+            miopenBatchNormMode_t::miopenBNSpatial
+        }
+        _ => return Err(cudnnError_t::NOT_SUPPORTED),
+    })
+}
+
+pub(crate) unsafe fn derive_b_n_tensor_descriptor(
+    derived_bn_desc: cudnnTensorDescriptor_t,
+    x_desc: cudnnTensorDescriptor_t,
+    mode: cudnnBatchNormMode_t,
+) -> cudnnStatus_t {
+    let miopen_mode = cudnn_to_miopen_batchnorm_mode(mode)?;
+
+    miopenDeriveBNTensorDescriptor(
+        miopenTensorDescriptor_t(derived_bn_desc as *mut _),
+        miopenTensorDescriptor_t(x_desc as *mut _),
+        miopen_mode,
+    )?;
+    Ok(())
+}
+
+pub(crate) unsafe fn batch_normalization_forward_inference(
+    handle: cudnnHandle_t,
+    mode: cudnnBatchNormMode_t,
+    alpha: *const ::std::os::raw::c_void,
+    beta: *const ::std::os::raw::c_void,
+    x_desc: cudnnTensorDescriptor_t,
+    x: *const ::std::os::raw::c_void,
+    y_desc: cudnnTensorDescriptor_t,
+    y: *mut ::std::os::raw::c_void,
+    bn_scale_bias_mean_var_desc: cudnnTensorDescriptor_t,
+    bn_scale: *const ::std::os::raw::c_void,
+    bn_bias: *const ::std::os::raw::c_void,
+    estimated_mean: *const ::std::os::raw::c_void,
+    estimated_variance: *const ::std::os::raw::c_void,
+    epsilon: f64,
+) -> cudnnStatus_t {
+    let ctx: &Context = zluda_common::FromCuda::from_cuda(&handle)?;
+    let miopen_mode = cudnn_to_miopen_batchnorm_mode(mode)?;
+
+    // MIOpen signature uses *mut for some const parameters, but doesn't modify them
+    miopenBatchNormalizationForwardInference(
+        ctx.base,
+        miopen_mode,
+        alpha as *mut _,
+        beta as *mut _,
+        miopenTensorDescriptor_t(x_desc as *mut _),
+        x,
+        miopenTensorDescriptor_t(y_desc as *mut _),
+        y,
+        miopenTensorDescriptor_t(bn_scale_bias_mean_var_desc as *mut _),
+        bn_scale as *mut _,
+        bn_bias as *mut _,
+        estimated_mean as *mut _,
+        estimated_variance as *mut _,
+        epsilon,
+    )?;
+    Ok(())
+}
+
 pub mod dnn9 {
     use cuda_types::cudnn9::*;
     use zluda_common::FromCuda;
@@ -1435,6 +1606,62 @@ pub mod dnn9 {
         y: *mut ::std::os::raw::c_void,
     ) -> cudnnStatus_t {
         super::pooling_forward(handle, pooling_desc, alpha, x_desc, x, beta, y_desc, y)
+    }
+
+    pub(crate) unsafe fn softmax_forward(
+        handle: cudnnHandle_t,
+        algo: cudnnSoftmaxAlgorithm_t,
+        mode: cudnnSoftmaxMode_t,
+        alpha: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        super::softmax_forward(handle, algo, mode, alpha, x_desc, x, beta, y_desc, y)
+    }
+
+    pub(crate) unsafe fn derive_b_n_tensor_descriptor(
+        derived_bn_desc: cudnnTensorDescriptor_t,
+        x_desc: cudnnTensorDescriptor_t,
+        mode: cudnnBatchNormMode_t,
+    ) -> cudnnStatus_t {
+        super::derive_b_n_tensor_descriptor(derived_bn_desc, x_desc, mode)
+    }
+
+    pub(crate) unsafe fn batch_normalization_forward_inference(
+        handle: cudnnHandle_t,
+        mode: cudnnBatchNormMode_t,
+        alpha: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *mut ::std::os::raw::c_void,
+        bn_scale_bias_mean_var_desc: cudnnTensorDescriptor_t,
+        bn_scale: *const ::std::os::raw::c_void,
+        bn_bias: *const ::std::os::raw::c_void,
+        estimated_mean: *const ::std::os::raw::c_void,
+        estimated_variance: *const ::std::os::raw::c_void,
+        epsilon: f64,
+    ) -> cudnnStatus_t {
+        super::batch_normalization_forward_inference(
+            handle,
+            mode,
+            alpha,
+            beta,
+            x_desc,
+            x,
+            y_desc,
+            y,
+            bn_scale_bias_mean_var_desc,
+            bn_scale,
+            bn_bias,
+            estimated_mean,
+            estimated_variance,
+            epsilon,
+        )
     }
 
     pub(crate) fn get_error_string(status: cudnnStatus_t) -> *const ::core::ffi::c_char {
