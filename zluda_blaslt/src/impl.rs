@@ -39,24 +39,43 @@ pub(crate) fn unimplemented() -> cublasStatus_t {
     cublasStatus_t::ERROR_NOT_SUPPORTED
 }
 
-pub(crate) fn get_status_name(_status: cublasStatus_t) -> *const ::core::ffi::c_char {
-    todo!()
+pub(crate) fn get_status_name(status: cublasStatus_t) -> *const ::core::ffi::c_char {
+    match status {
+        cublasStatus_t::SUCCESS => "CUBLAS_STATUS_SUCCESS\0",
+        cublasStatus_t::ERROR_NOT_INITIALIZED => "CUBLAS_STATUS_NOT_INITIALIZED\0",
+        cublasStatus_t::ERROR_ALLOC_FAILED => "CUBLAS_STATUS_ALLOC_FAILED\0",
+        cublasStatus_t::ERROR_INVALID_VALUE => "CUBLAS_STATUS_INVALID_VALUE\0",
+        cublasStatus_t::ERROR_ARCH_MISMATCH => "CUBLAS_STATUS_ARCH_MISMATCH\0",
+        cublasStatus_t::ERROR_MAPPING_ERROR => "CUBLAS_STATUS_MAPPING_ERROR\0",
+        cublasStatus_t::ERROR_EXECUTION_FAILED => "CUBLAS_STATUS_EXECUTION_FAILED\0",
+        cublasStatus_t::ERROR_INTERNAL_ERROR => "CUBLAS_STATUS_INTERNAL_ERROR\0",
+        cublasStatus_t::ERROR_NOT_SUPPORTED => "CUBLAS_STATUS_NOT_SUPPORTED\0",
+        cublasStatus_t::ERROR_LICENSE_ERROR => "CUBLAS_STATUS_LICENSE_ERROR\0",
+        _ => "CUBLAS_STATUS_UNKNOWN\0",
+    }
+    .as_ptr() as *const ::core::ffi::c_char
 }
 
-pub(crate) fn get_status_string(_status: cublasStatus_t) -> *const ::core::ffi::c_char {
-    todo!()
+pub(crate) fn get_status_string(status: cublasStatus_t) -> *const ::core::ffi::c_char {
+    // Same as get_status_name for cuBLASLt
+    get_status_name(status)
 }
 
 pub(crate) fn get_version() -> usize {
-    todo!()
+    // Return cuBLASLt version matching CUDA 13.0 (version 130000 = 13.0.0)
+    130000
 }
 
 pub(crate) fn get_cudart_version() -> usize {
-    todo!()
+    // Return CUDA runtime version matching the driver (CUDA 13.0)
+    cuda_types::cuda::CUDA_VERSION as usize
 }
 
-pub(crate) fn disable_cpu_instructions_set_mask(_mask: ::core::ffi::c_uint) -> ::core::ffi::c_uint {
-    todo!()
+pub(crate) fn disable_cpu_instructions_set_mask(mask: ::core::ffi::c_uint) -> ::core::ffi::c_uint {
+    // This function allows disabling specific CPU instruction sets (AVX, SSE, etc.)
+    // Since we're running on AMD GPUs via ROCm, CPU instruction sets are not relevant
+    // Return the mask unchanged to indicate all requested instruction sets are "disabled"
+    mask
 }
 
 pub(crate) fn create(handle: &mut cublasLtHandle_t) -> cublasStatus_t {
