@@ -157,10 +157,15 @@ struct DarkApi {}
 
 impl ::dark_api::cuda::CudaDarkApi for DarkApi {
     unsafe extern "system" fn get_module_from_cubin(
-        _module: *mut cuda_types::cuda::CUmodule,
-        _fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
+        module: *mut cuda_types::cuda::CUmodule,
+        fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
     ) -> cuda_types::cuda::CUresult {
-        Err(r#impl::unimplemented())
+        if module.is_null() || fatbinc_wrapper.is_null() {
+            return CUresult::ERROR_INVALID_VALUE;
+        }
+        let module = &mut *module;
+        let image = &*(fatbinc_wrapper as *const c_void);
+        r#impl::module::load_data(module, image)
     }
 
     unsafe extern "system" fn cudart_interface_fn2(
@@ -197,13 +202,18 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
     }
 
     unsafe extern "system" fn get_module_from_cubin_ext2(
-        _fatbin_header: *const cuda_types::dark_api::FatbinHeader,
-        _result: *mut cuda_types::cuda::CUmodule,
+        fatbin_header: *const cuda_types::dark_api::FatbinHeader,
+        result: *mut cuda_types::cuda::CUmodule,
         _arg3: *mut std::ffi::c_void,
         _arg4: *mut std::ffi::c_void,
         _arg5: u32,
     ) -> cuda_types::cuda::CUresult {
-        Err(r#impl::unimplemented())
+        if result.is_null() || fatbin_header.is_null() {
+            return CUresult::ERROR_INVALID_VALUE;
+        }
+        let result = &mut *result;
+        let image = &*(fatbin_header as *const c_void);
+        r#impl::module::load_data(result, image)
     }
 
     unsafe extern "system" fn get_unknown_buffer1(
