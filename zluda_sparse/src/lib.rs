@@ -31,11 +31,17 @@ cuda_macros::cusparse_function_declarations!(
     unimplemented,
     implemented
         <= [
+            cusparseCreateMatDescr,
+            cusparseDestroyMatDescr,
             cusparseGetErrorName,
             cusparseGetErrorString,
-            cusparseGetMatIndexBase,
             cusparseGetMatDiagType,
             cusparseGetMatFillMode,
-            cusparseGetMatType
+            cusparseGetMatIndexBase,
+            cusparseGetMatType,
+            cusparseSetMatDiagType,
+            cusparseSetMatFillMode,
+            cusparseSetMatIndexBase,
+            cusparseSetMatType
         ]
 );

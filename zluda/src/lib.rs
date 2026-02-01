@@ -122,6 +122,7 @@ cuda_macros::cuda_function_declarations!(
             cuGraphExecUpdate_v2,
             cuGraphGetNodes,
             cuGraphInstantiateWithFlags,
+            cuGraphInstantiateWithParams,
             cuGraphLaunch,
             cuInit,
             cuKernelGetFunction,

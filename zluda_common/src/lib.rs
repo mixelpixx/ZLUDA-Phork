@@ -221,6 +221,7 @@ from_cuda_nop!(
     CUfunction_attribute,
     CUgraphExecUpdateResultInfo,
     *mut *const cuda_types::cuda::CUgraphEdgeData,
+    CUDA_GRAPH_INSTANTIATE_PARAMS,
     *mut cudnn9::cudnnHandle_t,
     cudnn9::cudnnHandle_t,
     cudnn9::cudnnMathType_t,

@@ -1,4 +1,6 @@
-use cuda_types::cuda::{CUerror, CUgraphExecUpdateResult, CUresult, CUresultConsts};
+use cuda_types::cuda::{
+    CUerror, CUgraphExecUpdateResult, CUgraphInstantiateResult, CUresult, CUresultConsts,
+};
 use hip_runtime_sys::*;
 use zluda_common::FromCuda;
 
@@ -78,4 +80,45 @@ pub(crate) unsafe fn instantiate_with_flags(
 
 pub(crate) unsafe fn launch(graph_exec: hipGraphExec_t, stream: hipStream_t) -> hipError_t {
     hipGraphLaunch(graph_exec, stream)
+}
+
+pub(crate) unsafe fn instantiate_with_params(
+    graph_exec: &mut hipGraphExec_t,
+    graph: hipGraph_t,
+    instantiate_params: &mut cuda_types::cuda::CUDA_GRAPH_INSTANTIATE_PARAMS,
+) -> CUresult {
+    // Create HIP params from CUDA params
+    let mut hip_params = hipGraphInstantiateParams {
+        errNode_out: std::mem::zeroed(),
+        flags: instantiate_params.flags,
+        result_out: hipGraphInstantiateResult::hipGraphInstantiateSuccess,
+        uploadStream: hipStream_t(instantiate_params.hUploadStream.0 as *mut _),
+    };
+
+    let result = hipGraphInstantiateWithParams(graph_exec, graph, &mut hip_params);
+
+    // Map HIP error node back to CUDA (they are both opaque pointers)
+    instantiate_params.hErrNode_out = hip_params.errNode_out as *mut _;
+
+    instantiate_params.result_out = match hip_params.result_out {
+        hipGraphInstantiateResult::hipGraphInstantiateSuccess => {
+            CUgraphInstantiateResult::CUDA_GRAPH_INSTANTIATE_SUCCESS
+        }
+        hipGraphInstantiateResult::hipGraphInstantiateError => {
+            CUgraphInstantiateResult::CUDA_GRAPH_INSTANTIATE_ERROR
+        }
+        hipGraphInstantiateResult::hipGraphInstantiateInvalidStructure => {
+            CUgraphInstantiateResult::CUDA_GRAPH_INSTANTIATE_INVALID_STRUCTURE
+        }
+        hipGraphInstantiateResult::hipGraphInstantiateNodeOperationNotSupported => {
+            CUgraphInstantiateResult::CUDA_GRAPH_INSTANTIATE_NODE_OPERATION_NOT_SUPPORTED
+        }
+        hipGraphInstantiateResult::hipGraphInstantiateMultipleDevicesNotSupported => {
+            CUgraphInstantiateResult::CUDA_GRAPH_INSTANTIATE_MULTIPLE_CTXS_NOT_SUPPORTED
+        }
+        _ => CUgraphInstantiateResult::CUDA_GRAPH_INSTANTIATE_ERROR,
+    };
+
+    result?;
+    Ok(())
 }
