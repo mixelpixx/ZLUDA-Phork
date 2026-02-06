@@ -31,17 +31,35 @@ cuda_macros::cusparse_function_declarations!(
     unimplemented,
     implemented
         <= [
+            cusparseCreate,
+            cusparseCreateCsr,
+            cusparseCreateDnMat,
+            cusparseCreateDnVec,
             cusparseCreateMatDescr,
+            cusparseCreateSpVec,
+            cusparseDestroy,
+            cusparseDestroyDnMat,
+            cusparseDestroyDnVec,
             cusparseDestroyMatDescr,
+            cusparseDestroySpMat,
+            cusparseDestroySpVec,
             cusparseGetErrorName,
             cusparseGetErrorString,
             cusparseGetMatDiagType,
             cusparseGetMatFillMode,
             cusparseGetMatIndexBase,
             cusparseGetMatType,
+            cusparseGetPointerMode,
+            cusparseGetStream,
             cusparseSetMatDiagType,
             cusparseSetMatFillMode,
             cusparseSetMatIndexBase,
-            cusparseSetMatType
+            cusparseSetMatType,
+            cusparseSetPointerMode,
+            cusparseSetStream,
+            cusparseSpMM,
+            cusparseSpMM_bufferSize,
+            cusparseSpMV,
+            cusparseSpMV_bufferSize
         ]
 );

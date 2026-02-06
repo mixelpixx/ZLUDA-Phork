@@ -36,6 +36,7 @@ fn main() {
     );
     generate_rocm_smi(&crate_root, &["..", "ext", "rocm_smi-sys", "src", "lib.rs"]);
     generate_miopen(&crate_root, &["..", "ext", "miopen-sys", "src", "lib.rs"]);
+    generate_hipsparse(&crate_root, &["..", "ext", "hipsparse-sys", "src", "lib.rs"]);
     let cuda_functions = generate_cuda(&crate_root);
     generate_process_address_table(&crate_root, cuda_functions);
     generate_ml(&crate_root);
@@ -134,6 +135,91 @@ fn generate_miopen(output: &PathBuf, path: &[&'static str]) {
         output,
         &prettyplease::unparse(&module).replace("hipStream_t", "hip_runtime_sys::hipStream_t"),
     )
+}
+
+fn generate_hipsparse(output: &PathBuf, path: &[&'static str]) {
+    let hipsparse_header = new_builder()
+        .header("/opt/rocm/include/hipsparse/hipsparse.h")
+        .allowlist_type("^hipsparse.*")
+        .allowlist_type("^bsrsv2Info.*")
+        .allowlist_type("^bsrsm2Info.*")
+        .allowlist_type("^bsrilu02Info.*")
+        .allowlist_type("^bsric02Info.*")
+        .allowlist_type("^csrsv2Info.*")
+        .allowlist_type("^csrsm2Info.*")
+        .allowlist_type("^csrilu02Info.*")
+        .allowlist_type("^csric02Info.*")
+        .allowlist_type("^csrgemm2Info.*")
+        .allowlist_type("^pruneInfo.*")
+        .allowlist_type("^csru2csrInfo.*")
+        .allowlist_function("^hipsparse.*")
+        .allowlist_var("^HIPSPARSE_.*")
+        .must_use_type("hipsparseStatus_t")
+        .constified_enum("hipsparseStatus_t")
+        .new_type_alias("^hipsparseHandle_t$")
+        .new_type_alias("^hipsparseMatDescr_t$")
+        .new_type_alias("^hipsparseHybMat_t$")
+        .new_type_alias("^hipsparseColorInfo_t$")
+        .new_type_alias("^hipsparseSpVecDescr_t$")
+        .new_type_alias("^hipsparseDnVecDescr_t$")
+        .new_type_alias("^hipsparseSpMatDescr_t$")
+        .new_type_alias("^hipsparseDnMatDescr_t$")
+        .new_type_alias("^hipsparseConstSpVecDescr_t$")
+        .new_type_alias("^hipsparseConstDnVecDescr_t$")
+        .new_type_alias("^hipsparseConstSpMatDescr_t$")
+        .new_type_alias("^hipsparseConstDnMatDescr_t$")
+        .new_type_alias("^hipsparseSpGEMMDescr_t$")
+        .new_type_alias("^hipsparseSpSVDescr_t$")
+        .new_type_alias("^hipsparseSpSMDescr_t$")
+        .clang_args(["-I/opt/rocm/include", "-D__HIP_PLATFORM_AMD__"])
+        .generate()
+        .unwrap()
+        .to_string();
+    let mut module: syn::File = syn::parse_str(&hipsparse_header).unwrap();
+    remove_type(&mut module, "hipStream_t");
+    remove_type(&mut module, "ihipStream_t");
+    let result_options = ConvertIntoRustResultOptions {
+        type_: "hipsparseStatus_t",
+        underlying_type: "hipsparseStatus_t",
+        new_error_type: "hipsparseError_t",
+        error_prefix: ("HIPSPARSE_STATUS_", "ERROR_"),
+        success: ("HIPSPARSE_STATUS_SUCCESS", "SUCCESS"),
+        hip_types: vec![],
+    };
+    let mut converter = ConvertIntoRustResult::new(result_options);
+    module.items = converter
+        .convert(module.items)
+        .map(|item| match item {
+            Item::ForeignMod(mut extern_) => {
+                extern_.attrs.push(
+                    parse_quote!(#[cfg_attr(windows, link(name = "hipsparse", kind = "raw-dylib"))]),
+                );
+                Item::ForeignMod(extern_)
+            }
+            item => item,
+        })
+        .collect();
+    converter.flush(&mut module.items);
+    add_send_sync(&mut module.items, &["hipsparseHandle_t"]);
+    add_send_sync(&mut module.items, &["hipsparseMatDescr_t"]);
+    add_send_sync(&mut module.items, &["hipsparseHybMat_t"]);
+    add_send_sync(&mut module.items, &["hipsparseColorInfo_t"]);
+    add_send_sync(&mut module.items, &["hipsparseSpVecDescr_t"]);
+    add_send_sync(&mut module.items, &["hipsparseDnVecDescr_t"]);
+    add_send_sync(&mut module.items, &["hipsparseSpMatDescr_t"]);
+    add_send_sync(&mut module.items, &["hipsparseDnMatDescr_t"]);
+    add_send_sync(&mut module.items, &["hipsparseConstSpVecDescr_t"]);
+    add_send_sync(&mut module.items, &["hipsparseConstDnVecDescr_t"]);
+    add_send_sync(&mut module.items, &["hipsparseConstSpMatDescr_t"]);
+    add_send_sync(&mut module.items, &["hipsparseConstDnMatDescr_t"]);
+    add_send_sync(&mut module.items, &["hipsparseSpGEMMDescr_t"]);
+    add_send_sync(&mut module.items, &["hipsparseSpSVDescr_t"]);
+    add_send_sync(&mut module.items, &["hipsparseSpSMDescr_t"]);
+    let mut output = output.clone();
+    output.extend(path);
+    let text = &prettyplease::unparse(&module)
+        .replace("hipStream_t", "hip_runtime_sys::hipStream_t");
+    write_rust_to_file(output, text)
 }
 
 fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>) {

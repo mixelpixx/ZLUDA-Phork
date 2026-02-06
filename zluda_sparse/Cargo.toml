@@ -10,6 +10,8 @@ name = "cusparse"
 [dependencies]
 cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
+hipsparse-sys = { path = "../ext/hipsparse-sys" }
+hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 
 [package.metadata.zluda]
 linux_symlinks = ["libcusparse.so.11", "libcusparse.so.12"]
