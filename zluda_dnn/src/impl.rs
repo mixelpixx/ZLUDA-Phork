@@ -263,6 +263,64 @@ pub(crate) unsafe fn set_tensor4d_descriptor(
     )
 }
 
+pub(crate) unsafe fn set_tensor_nd_descriptor(
+    tensor_desc: miopenTensorDescriptor_t,
+    data_type: miopenDataType_t,
+    nb_dims: ::std::os::raw::c_int,
+    dim_a: *const ::std::os::raw::c_int,
+    stride_a: *const ::std::os::raw::c_int,
+) -> miopenStatus_t {
+    miopenSetTensorDescriptor(tensor_desc, data_type, nb_dims, dim_a, stride_a)
+}
+
+pub(crate) unsafe fn get_tensor_nd_descriptor(
+    tensor_desc: cudnnTensorDescriptor_t,
+    nb_dims_requested: ::std::os::raw::c_int,
+    data_type: *mut cudnnDataType_t,
+    nb_dims: *mut ::std::os::raw::c_int,
+    dim_a: *mut ::std::os::raw::c_int,
+    stride_a: *mut ::std::os::raw::c_int,
+) -> cudnnStatus_t {
+    // MIOpen's GetTensorDescriptor doesn't return ndims, so we first
+    // query into a max-size buffer then copy the requested number of dims
+    const MAX_DIMS: usize = 8;
+    let mut miopen_data_type = miopenDataType_t(0);
+    let mut dims = [0i32; MAX_DIMS];
+    let mut strides = [0i32; MAX_DIMS];
+
+    miopenGetTensorDescriptor(
+        miopenTensorDescriptor_t(tensor_desc as *mut _),
+        &mut miopen_data_type,
+        dims.as_mut_ptr(),
+        strides.as_mut_ptr(),
+    )?;
+
+    // Determine actual number of dims by finding last non-zero dim
+    let mut actual_dims = 0i32;
+    for i in 0..MAX_DIMS {
+        if dims[i] != 0 {
+            actual_dims = (i + 1) as i32;
+        }
+    }
+
+    if !data_type.is_null() {
+        *data_type = miopen_to_cudnn_data_type(miopen_data_type);
+    }
+    if !nb_dims.is_null() {
+        *nb_dims = actual_dims;
+    }
+
+    let copy_count = (nb_dims_requested as usize).min(actual_dims as usize).min(MAX_DIMS);
+    if !dim_a.is_null() {
+        ptr::copy_nonoverlapping(dims.as_ptr(), dim_a, copy_count);
+    }
+    if !stride_a.is_null() {
+        ptr::copy_nonoverlapping(strides.as_ptr(), stride_a, copy_count);
+    }
+
+    Ok(())
+}
+
 pub(crate) unsafe fn set_filter4d_descriptor(
     filter_desc: miopenTensorDescriptor_t,
     data_type: miopenDataType_t,
@@ -1522,6 +1580,24 @@ pub mod dnn8 {
         ))
     }
 
+    pub(crate) unsafe fn get_tensor_nd_descriptor(
+        tensor_desc: cudnnTensorDescriptor_t,
+        nb_dims_requested: ::std::os::raw::c_int,
+        data_type: *mut cudnnDataType_t,
+        nb_dims: *mut ::std::os::raw::c_int,
+        dim_a: *mut ::std::os::raw::c_int,
+        stride_a: *mut ::std::os::raw::c_int,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::get_tensor_nd_descriptor(
+            tensor_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            nb_dims_requested,
+            data_type as *mut cuda_types::cudnn9::cudnnDataType_t,
+            nb_dims,
+            dim_a,
+            stride_a,
+        ))
+    }
+
     pub(crate) unsafe fn derive_norm_tensor_descriptor(
         derived_norm_scale_bias_desc: cudnnTensorDescriptor_t,
         derived_norm_mean_var_desc: cudnnTensorDescriptor_t,
@@ -1782,6 +1858,21 @@ fn cudnn_to_miopen_pooling_mode(
         }
         _ => return Err(cudnnError_t::NOT_SUPPORTED),
     })
+}
+
+fn miopen_to_cudnn_data_type(data_type: miopenDataType_t) -> cudnnDataType_t {
+    match data_type {
+        miopenDataType_t::miopenHalf => cudnnDataType_t::CUDNN_DATA_HALF,
+        miopenDataType_t::miopenFloat => cudnnDataType_t::CUDNN_DATA_FLOAT,
+        miopenDataType_t::miopenInt32 => cudnnDataType_t::CUDNN_DATA_INT32,
+        miopenDataType_t::miopenInt8 => cudnnDataType_t::CUDNN_DATA_INT8,
+        miopenDataType_t::miopenBFloat16 => cudnnDataType_t::CUDNN_DATA_BFLOAT16,
+        miopenDataType_t::miopenDouble => cudnnDataType_t::CUDNN_DATA_DOUBLE,
+        miopenDataType_t::miopenFloat8 => cudnnDataType_t::CUDNN_DATA_FP8_E4M3,
+        miopenDataType_t::miopenBFloat8 => cudnnDataType_t::CUDNN_DATA_FP8_E5M2,
+        miopenDataType_t::miopenInt64 => cudnnDataType_t::CUDNN_DATA_INT64,
+        _ => cudnnDataType_t::CUDNN_DATA_FLOAT,
+    }
 }
 
 fn miopen_to_cudnn_pooling_mode(mode: miopenPoolingMode_t) -> cudnnPoolingMode_t {
@@ -2291,6 +2382,19 @@ pub mod dnn9 {
             x_desc, x, dy_desc, dy, dx_desc, dx,
             d_bn_scale_bias_desc, bn_scale, d_bn_scale_result, d_bn_bias_result,
             epsilon, saved_mean, saved_inv_variance,
+        )
+    }
+
+    pub(crate) unsafe fn get_tensor_nd_descriptor(
+        tensor_desc: cudnnTensorDescriptor_t,
+        nb_dims_requested: ::std::os::raw::c_int,
+        data_type: *mut cudnnDataType_t,
+        nb_dims: *mut ::std::os::raw::c_int,
+        dim_a: *mut ::std::os::raw::c_int,
+        stride_a: *mut ::std::os::raw::c_int,
+    ) -> cudnnStatus_t {
+        super::get_tensor_nd_descriptor(
+            tensor_desc, nb_dims_requested, data_type, nb_dims, dim_a, stride_a,
         )
     }
 

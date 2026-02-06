@@ -173,6 +173,7 @@ macro_rules! from_cuda_object {
 
 from_cuda_nop!(
     *mut i8,
+    *const i32,
     *mut i32,
     *mut u64,
     *mut usize,

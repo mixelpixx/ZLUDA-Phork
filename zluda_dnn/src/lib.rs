@@ -95,6 +95,7 @@ dual_function_declarations! {
         cudnnGetConvolutionForwardAlgorithm_v7,
         cudnnGetErrorString,
         cudnnGetPooling2dDescriptor,
+        cudnnGetTensorNdDescriptor,
         cudnnNormalizationForwardInference,
         cudnnPoolingBackward,
         cudnnPoolingForward,
@@ -123,6 +124,7 @@ dual_function_declarations! {
         cudnnSetConvolution2dDescriptor,
         cudnnSetConvolutionMathType,
         cudnnSetFilter4dDescriptor,
-        cudnnSetTensor4dDescriptor
+        cudnnSetTensor4dDescriptor,
+        cudnnSetTensorNdDescriptor
     ]
 }
