@@ -20,6 +20,7 @@ const CUBLASLT_RS: &'static str = include_str! {"cublaslt.rs"};
 const CUBLASLT_INTERNAL_RS: &'static str = include_str! {"cublaslt_internal.rs"};
 const CUFFT_RS: &'static str = include_str! {"cufft.rs"};
 const CUSPARSE_RS: &'static str = include_str! {"cusparse.rs"};
+const CURAND_RS: &'static str = include_str! {"curand.rs"};
 const CUDNN8_RS: &'static str = include_str! {"cudnn8.rs"};
 const CUDNN9_RS: &'static str = include_str! {"cudnn9.rs"};
 
@@ -60,6 +61,11 @@ pub fn cublaslt_internal_function_declarations(tokens: TokenStream) -> TokenStre
 #[proc_macro]
 pub fn cufft_function_declarations(tokens: TokenStream) -> TokenStream {
     function_declarations(tokens, CUFFT_RS)
+}
+
+#[proc_macro]
+pub fn curand_function_declarations(tokens: TokenStream) -> TokenStream {
+    function_declarations(tokens, CURAND_RS)
 }
 
 #[proc_macro]
@@ -255,6 +261,11 @@ pub fn cudnn_normalize_fn(tokens: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn cufft_normalize_fn(tokens: TokenStream) -> TokenStream {
     normalize_fn_impl("cufft", None, tokens)
+}
+
+#[proc_macro]
+pub fn curand_normalize_fn(tokens: TokenStream) -> TokenStream {
+    normalize_fn_impl("curand", None, tokens)
 }
 
 #[proc_macro]
