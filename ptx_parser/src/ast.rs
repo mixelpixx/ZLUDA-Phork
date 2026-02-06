@@ -2741,7 +2741,7 @@ impl MmaDetails {
     }
     pub fn btype(&self) -> Type {
         match self.dimension {
-            MmaDimension::M16n8k8 => Type::Scalar(ScalarType::U32),
+            MmaDimension::M16n8k8 => Type::Scalar(ScalarType::B32),
             _ => Type::Vector(2, ScalarType::U32),
         }
     }
