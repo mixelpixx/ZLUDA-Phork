@@ -1031,6 +1031,98 @@ pub(crate) unsafe fn batch_normalization_backward(
     Ok(())
 }
 
+fn cudnn_norm_to_miopen_batchnorm_mode(
+    mode: cudnnNormMode_t,
+) -> Result<miopenBatchNormMode_t, cudnnError_t> {
+    Ok(match mode {
+        cudnnNormMode_t::CUDNN_NORM_PER_ACTIVATION => {
+            miopenBatchNormMode_t::miopenBNPerActivation
+        }
+        cudnnNormMode_t::CUDNN_NORM_PER_CHANNEL => {
+            miopenBatchNormMode_t::miopenBNSpatial
+        }
+        _ => return Err(cudnnError_t::NOT_SUPPORTED),
+    })
+}
+
+pub(crate) unsafe fn derive_norm_tensor_descriptor(
+    derived_norm_scale_bias_desc: cudnnTensorDescriptor_t,
+    derived_norm_mean_var_desc: cudnnTensorDescriptor_t,
+    x_desc: cudnnTensorDescriptor_t,
+    mode: cudnnNormMode_t,
+    _group_cnt: ::core::ffi::c_int,
+) -> cudnnStatus_t {
+    let miopen_mode = cudnn_norm_to_miopen_batchnorm_mode(mode)?;
+
+    // Derive both descriptors using the same batch norm derivation
+    miopenDeriveBNTensorDescriptor(
+        miopenTensorDescriptor_t(derived_norm_scale_bias_desc as *mut _),
+        miopenTensorDescriptor_t(x_desc as *mut _),
+        miopen_mode,
+    )?;
+    miopenDeriveBNTensorDescriptor(
+        miopenTensorDescriptor_t(derived_norm_mean_var_desc as *mut _),
+        miopenTensorDescriptor_t(x_desc as *mut _),
+        miopen_mode,
+    )?;
+    Ok(())
+}
+
+pub(crate) unsafe fn normalization_forward_inference(
+    handle: cudnnHandle_t,
+    mode: cudnnNormMode_t,
+    norm_ops: cudnnNormOps_t,
+    _algo: cudnnNormAlgo_t,
+    alpha: *const ::std::os::raw::c_void,
+    beta: *const ::std::os::raw::c_void,
+    x_desc: cudnnTensorDescriptor_t,
+    x: *const ::std::os::raw::c_void,
+    norm_scale_bias_desc: cudnnTensorDescriptor_t,
+    norm_scale: *const ::std::os::raw::c_void,
+    norm_bias: *const ::std::os::raw::c_void,
+    norm_mean_var_desc: cudnnTensorDescriptor_t,
+    estimated_mean: *const ::std::os::raw::c_void,
+    estimated_variance: *const ::std::os::raw::c_void,
+    _z_desc: cudnnTensorDescriptor_t,
+    _z: *const ::std::os::raw::c_void,
+    _activation_desc: cudnnActivationDescriptor_t,
+    y_desc: cudnnTensorDescriptor_t,
+    y: *mut ::std::os::raw::c_void,
+    epsilon: f64,
+    _group_cnt: ::core::ffi::c_int,
+) -> cudnnStatus_t {
+    // Only support basic normalization (no fused activation or residual add)
+    if norm_ops != cudnnNormOps_t::CUDNN_NORM_OPS_NORM {
+        return Err(cudnnError_t::NOT_SUPPORTED);
+    }
+
+    let ctx: &Context = zluda_common::FromCuda::from_cuda(&handle)?;
+    let miopen_mode = cudnn_norm_to_miopen_batchnorm_mode(mode)?;
+
+    // Map to batch normalization forward inference
+    // cudnnNormalizationForwardInference uses normScaleBiasDesc for scale/bias
+    // and normMeanVarDesc for mean/variance, but MIOpen uses a single descriptor
+    // for all four. Use normScaleBiasDesc which should be compatible.
+    let _ = norm_mean_var_desc; // MIOpen uses a single descriptor
+    miopenBatchNormalizationForwardInference(
+        ctx.base,
+        miopen_mode,
+        alpha as *mut _,
+        beta as *mut _,
+        miopenTensorDescriptor_t(x_desc as *mut _),
+        x,
+        miopenTensorDescriptor_t(y_desc as *mut _),
+        y,
+        miopenTensorDescriptor_t(norm_scale_bias_desc as *mut _),
+        norm_scale as *mut _,
+        norm_bias as *mut _,
+        estimated_mean as *mut _,
+        estimated_variance as *mut _,
+        epsilon,
+    )?;
+    Ok(())
+}
+
 pub mod dnn8 {
     use cuda_types::cudnn8::*;
     use std::mem;
@@ -1427,6 +1519,70 @@ pub mod dnn8 {
             epsilon,
             saved_mean,
             saved_inv_variance,
+        ))
+    }
+
+    pub(crate) unsafe fn derive_norm_tensor_descriptor(
+        derived_norm_scale_bias_desc: cudnnTensorDescriptor_t,
+        derived_norm_mean_var_desc: cudnnTensorDescriptor_t,
+        x_desc: cudnnTensorDescriptor_t,
+        mode: cudnnNormMode_t,
+        group_cnt: ::core::ffi::c_int,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::derive_norm_tensor_descriptor(
+            derived_norm_scale_bias_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            derived_norm_mean_var_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            x_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            mem::transmute(mode),
+            group_cnt,
+        ))
+    }
+
+    pub(crate) unsafe fn normalization_forward_inference(
+        handle: cudnnHandle_t,
+        mode: cudnnNormMode_t,
+        norm_ops: cudnnNormOps_t,
+        algo: cudnnNormAlgo_t,
+        alpha: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        norm_scale_bias_desc: cudnnTensorDescriptor_t,
+        norm_scale: *const ::std::os::raw::c_void,
+        norm_bias: *const ::std::os::raw::c_void,
+        norm_mean_var_desc: cudnnTensorDescriptor_t,
+        estimated_mean: *const ::std::os::raw::c_void,
+        estimated_variance: *const ::std::os::raw::c_void,
+        z_desc: cudnnTensorDescriptor_t,
+        z: *const ::std::os::raw::c_void,
+        activation_desc: cudnnActivationDescriptor_t,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *mut ::std::os::raw::c_void,
+        epsilon: f64,
+        group_cnt: ::core::ffi::c_int,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::normalization_forward_inference(
+            handle as cuda_types::cudnn9::cudnnHandle_t,
+            mem::transmute(mode),
+            mem::transmute(norm_ops),
+            mem::transmute(algo),
+            alpha,
+            beta,
+            x_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            x,
+            norm_scale_bias_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            norm_scale,
+            norm_bias,
+            norm_mean_var_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            estimated_mean,
+            estimated_variance,
+            z_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            z,
+            activation_desc as cuda_types::cudnn9::cudnnActivationDescriptor_t,
+            y_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            y,
+            epsilon,
+            group_cnt,
         ))
     }
 
@@ -2135,6 +2291,50 @@ pub mod dnn9 {
             x_desc, x, dy_desc, dy, dx_desc, dx,
             d_bn_scale_bias_desc, bn_scale, d_bn_scale_result, d_bn_bias_result,
             epsilon, saved_mean, saved_inv_variance,
+        )
+    }
+
+    pub(crate) unsafe fn derive_norm_tensor_descriptor(
+        derived_norm_scale_bias_desc: cudnnTensorDescriptor_t,
+        derived_norm_mean_var_desc: cudnnTensorDescriptor_t,
+        x_desc: cudnnTensorDescriptor_t,
+        mode: cudnnNormMode_t,
+        group_cnt: ::core::ffi::c_int,
+    ) -> cudnnStatus_t {
+        super::derive_norm_tensor_descriptor(
+            derived_norm_scale_bias_desc, derived_norm_mean_var_desc,
+            x_desc, mode, group_cnt,
+        )
+    }
+
+    pub(crate) unsafe fn normalization_forward_inference(
+        handle: cudnnHandle_t,
+        mode: cudnnNormMode_t,
+        norm_ops: cudnnNormOps_t,
+        algo: cudnnNormAlgo_t,
+        alpha: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        norm_scale_bias_desc: cudnnTensorDescriptor_t,
+        norm_scale: *const ::std::os::raw::c_void,
+        norm_bias: *const ::std::os::raw::c_void,
+        norm_mean_var_desc: cudnnTensorDescriptor_t,
+        estimated_mean: *const ::std::os::raw::c_void,
+        estimated_variance: *const ::std::os::raw::c_void,
+        z_desc: cudnnTensorDescriptor_t,
+        z: *const ::std::os::raw::c_void,
+        activation_desc: cudnnActivationDescriptor_t,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *mut ::std::os::raw::c_void,
+        epsilon: f64,
+        group_cnt: ::core::ffi::c_int,
+    ) -> cudnnStatus_t {
+        super::normalization_forward_inference(
+            handle, mode, norm_ops, algo, alpha, beta,
+            x_desc, x, norm_scale_bias_desc, norm_scale, norm_bias,
+            norm_mean_var_desc, estimated_mean, estimated_variance,
+            z_desc, z, activation_desc, y_desc, y, epsilon, group_cnt,
         )
     }
 
