@@ -835,6 +835,202 @@ pub(crate) unsafe fn activation_forward(
     Ok(())
 }
 
+// Backward passes
+
+pub(crate) unsafe fn activation_backward(
+    handle: cudnnHandle_t,
+    activation_desc: cudnnActivationDescriptor_t,
+    alpha: *const ::std::os::raw::c_void,
+    y_desc: cudnnTensorDescriptor_t,
+    y: *const ::std::os::raw::c_void,
+    dy_desc: cudnnTensorDescriptor_t,
+    dy: *const ::std::os::raw::c_void,
+    x_desc: cudnnTensorDescriptor_t,
+    x: *const ::std::os::raw::c_void,
+    beta: *const ::std::os::raw::c_void,
+    dx_desc: cudnnTensorDescriptor_t,
+    dx: *mut ::std::os::raw::c_void,
+) -> cudnnStatus_t {
+    let ctx: &Context = zluda_common::FromCuda::from_cuda(&handle)?;
+    let act_desc: &ActivationDescriptor = zluda_common::FromCuda::from_cuda(&activation_desc)?;
+    miopenActivationBackward(
+        ctx.base,
+        act_desc.base,
+        alpha,
+        miopenTensorDescriptor_t(y_desc as *mut _),
+        y,
+        miopenTensorDescriptor_t(dy_desc as *mut _),
+        dy,
+        miopenTensorDescriptor_t(x_desc as *mut _),
+        x,
+        beta,
+        miopenTensorDescriptor_t(dx_desc as *mut _),
+        dx,
+    )?;
+    Ok(())
+}
+
+pub(crate) unsafe fn softmax_backward(
+    handle: cudnnHandle_t,
+    algo: cudnnSoftmaxAlgorithm_t,
+    mode: cudnnSoftmaxMode_t,
+    alpha: *const ::std::os::raw::c_void,
+    y_desc: cudnnTensorDescriptor_t,
+    y: *const ::std::os::raw::c_void,
+    dy_desc: cudnnTensorDescriptor_t,
+    dy: *const ::std::os::raw::c_void,
+    beta: *const ::std::os::raw::c_void,
+    dx_desc: cudnnTensorDescriptor_t,
+    dx: *mut ::std::os::raw::c_void,
+) -> cudnnStatus_t {
+    let ctx: &Context = zluda_common::FromCuda::from_cuda(&handle)?;
+    let miopen_algo = miopenSoftmaxAlgorithm_t(algo.0);
+    let miopen_mode = miopenSoftmaxMode_t(mode.0);
+
+    miopenSoftmaxBackward_V2(
+        ctx.base,
+        alpha,
+        miopenTensorDescriptor_t(y_desc as *mut _),
+        y,
+        miopenTensorDescriptor_t(dy_desc as *mut _),
+        dy,
+        beta,
+        miopenTensorDescriptor_t(dx_desc as *mut _),
+        dx,
+        miopen_algo,
+        miopen_mode,
+    )?;
+    Ok(())
+}
+
+pub(crate) unsafe fn pooling_backward(
+    handle: cudnnHandle_t,
+    pooling_desc: cudnnPoolingDescriptor_t,
+    alpha: *const ::std::os::raw::c_void,
+    y_desc: cudnnTensorDescriptor_t,
+    y: *const ::std::os::raw::c_void,
+    dy_desc: cudnnTensorDescriptor_t,
+    dy: *const ::std::os::raw::c_void,
+    x_desc: cudnnTensorDescriptor_t,
+    x: *const ::std::os::raw::c_void,
+    beta: *const ::std::os::raw::c_void,
+    dx_desc: cudnnTensorDescriptor_t,
+    dx: *mut ::std::os::raw::c_void,
+) -> cudnnStatus_t {
+    let ctx: &Context = zluda_common::FromCuda::from_cuda(&handle)?;
+    let pool_desc: &PoolingDescriptor = zluda_common::FromCuda::from_cuda(&pooling_desc)?;
+
+    // MIOpen pooling backward requires a workspace (null + 0 size for basic cases)
+    miopenPoolingBackward(
+        ctx.base,
+        pool_desc.base,
+        alpha,
+        miopenTensorDescriptor_t(y_desc as *mut _),
+        y,
+        miopenTensorDescriptor_t(dy_desc as *mut _),
+        dy,
+        miopenTensorDescriptor_t(x_desc as *mut _),
+        x,
+        beta,
+        miopenTensorDescriptor_t(dx_desc as *mut _),
+        dx,
+        ptr::null_mut(),
+    )?;
+    Ok(())
+}
+
+pub(crate) unsafe fn batch_normalization_forward_training(
+    handle: cudnnHandle_t,
+    mode: cudnnBatchNormMode_t,
+    alpha: *const ::std::os::raw::c_void,
+    beta: *const ::std::os::raw::c_void,
+    x_desc: cudnnTensorDescriptor_t,
+    x: *const ::std::os::raw::c_void,
+    y_desc: cudnnTensorDescriptor_t,
+    y: *mut ::std::os::raw::c_void,
+    bn_scale_bias_mean_var_desc: cudnnTensorDescriptor_t,
+    bn_scale: *const ::std::os::raw::c_void,
+    bn_bias: *const ::std::os::raw::c_void,
+    exponential_average_factor: f64,
+    result_running_mean: *mut ::std::os::raw::c_void,
+    result_running_variance: *mut ::std::os::raw::c_void,
+    epsilon: f64,
+    result_save_mean: *mut ::std::os::raw::c_void,
+    result_save_inv_variance: *mut ::std::os::raw::c_void,
+) -> cudnnStatus_t {
+    let ctx: &Context = zluda_common::FromCuda::from_cuda(&handle)?;
+    let miopen_mode = cudnn_to_miopen_batchnorm_mode(mode)?;
+
+    miopenBatchNormalizationForwardTraining(
+        ctx.base,
+        miopen_mode,
+        alpha as *mut _,
+        beta as *mut _,
+        miopenTensorDescriptor_t(x_desc as *mut _),
+        x,
+        miopenTensorDescriptor_t(y_desc as *mut _),
+        y,
+        miopenTensorDescriptor_t(bn_scale_bias_mean_var_desc as *mut _),
+        bn_scale as *mut _,
+        bn_bias as *mut _,
+        exponential_average_factor,
+        result_running_mean,
+        result_running_variance,
+        epsilon,
+        result_save_mean,
+        result_save_inv_variance,
+    )?;
+    Ok(())
+}
+
+pub(crate) unsafe fn batch_normalization_backward(
+    handle: cudnnHandle_t,
+    mode: cudnnBatchNormMode_t,
+    alpha_data_diff: *const ::std::os::raw::c_void,
+    beta_data_diff: *const ::std::os::raw::c_void,
+    alpha_param_diff: *const ::std::os::raw::c_void,
+    beta_param_diff: *const ::std::os::raw::c_void,
+    x_desc: cudnnTensorDescriptor_t,
+    x: *const ::std::os::raw::c_void,
+    dy_desc: cudnnTensorDescriptor_t,
+    dy: *const ::std::os::raw::c_void,
+    dx_desc: cudnnTensorDescriptor_t,
+    dx: *mut ::std::os::raw::c_void,
+    d_bn_scale_bias_desc: cudnnTensorDescriptor_t,
+    bn_scale: *const ::std::os::raw::c_void,
+    d_bn_scale_result: *mut ::std::os::raw::c_void,
+    d_bn_bias_result: *mut ::std::os::raw::c_void,
+    epsilon: f64,
+    saved_mean: *const ::std::os::raw::c_void,
+    saved_inv_variance: *const ::std::os::raw::c_void,
+) -> cudnnStatus_t {
+    let ctx: &Context = zluda_common::FromCuda::from_cuda(&handle)?;
+    let miopen_mode = cudnn_to_miopen_batchnorm_mode(mode)?;
+
+    miopenBatchNormalizationBackward(
+        ctx.base,
+        miopen_mode,
+        alpha_data_diff,
+        beta_data_diff,
+        alpha_param_diff,
+        beta_param_diff,
+        miopenTensorDescriptor_t(x_desc as *mut _),
+        x,
+        miopenTensorDescriptor_t(dy_desc as *mut _),
+        dy,
+        miopenTensorDescriptor_t(dx_desc as *mut _),
+        dx,
+        miopenTensorDescriptor_t(d_bn_scale_bias_desc as *mut _),
+        bn_scale,
+        d_bn_scale_result,
+        d_bn_bias_result,
+        epsilon,
+        saved_mean,
+        saved_inv_variance,
+    )?;
+    Ok(())
+}
+
 pub mod dnn8 {
     use cuda_types::cudnn8::*;
     use std::mem;
@@ -1059,6 +1255,178 @@ pub mod dnn8 {
             estimated_mean,
             estimated_variance,
             epsilon,
+        ))
+    }
+
+    pub(crate) unsafe fn activation_backward(
+        handle: cudnnHandle_t,
+        activation_desc: cudnnActivationDescriptor_t,
+        alpha: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *const ::std::os::raw::c_void,
+        dy_desc: cudnnTensorDescriptor_t,
+        dy: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        dx_desc: cudnnTensorDescriptor_t,
+        dx: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::activation_backward(
+            handle as cuda_types::cudnn9::cudnnHandle_t,
+            activation_desc as cuda_types::cudnn9::cudnnActivationDescriptor_t,
+            alpha,
+            y_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            y,
+            dy_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            dy,
+            x_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            x,
+            beta,
+            dx_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            dx,
+        ))
+    }
+
+    pub(crate) unsafe fn softmax_backward(
+        handle: cudnnHandle_t,
+        algo: cudnnSoftmaxAlgorithm_t,
+        mode: cudnnSoftmaxMode_t,
+        alpha: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *const ::std::os::raw::c_void,
+        dy_desc: cudnnTensorDescriptor_t,
+        dy: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        dx_desc: cudnnTensorDescriptor_t,
+        dx: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::softmax_backward(
+            handle as cuda_types::cudnn9::cudnnHandle_t,
+            mem::transmute(algo),
+            mem::transmute(mode),
+            alpha,
+            y_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            y,
+            dy_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            dy,
+            beta,
+            dx_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            dx,
+        ))
+    }
+
+    pub(crate) unsafe fn pooling_backward(
+        handle: cudnnHandle_t,
+        pooling_desc: cudnnPoolingDescriptor_t,
+        alpha: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *const ::std::os::raw::c_void,
+        dy_desc: cudnnTensorDescriptor_t,
+        dy: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        dx_desc: cudnnTensorDescriptor_t,
+        dx: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::pooling_backward(
+            handle as cuda_types::cudnn9::cudnnHandle_t,
+            pooling_desc as cuda_types::cudnn9::cudnnPoolingDescriptor_t,
+            alpha,
+            y_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            y,
+            dy_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            dy,
+            x_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            x,
+            beta,
+            dx_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            dx,
+        ))
+    }
+
+    pub(crate) unsafe fn batch_normalization_forward_training(
+        handle: cudnnHandle_t,
+        mode: cudnnBatchNormMode_t,
+        alpha: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *mut ::std::os::raw::c_void,
+        bn_scale_bias_mean_var_desc: cudnnTensorDescriptor_t,
+        bn_scale: *const ::std::os::raw::c_void,
+        bn_bias: *const ::std::os::raw::c_void,
+        exponential_average_factor: f64,
+        result_running_mean: *mut ::std::os::raw::c_void,
+        result_running_variance: *mut ::std::os::raw::c_void,
+        epsilon: f64,
+        result_save_mean: *mut ::std::os::raw::c_void,
+        result_save_inv_variance: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::batch_normalization_forward_training(
+            handle as cuda_types::cudnn9::cudnnHandle_t,
+            mem::transmute(mode),
+            alpha,
+            beta,
+            x_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            x,
+            y_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            y,
+            bn_scale_bias_mean_var_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            bn_scale,
+            bn_bias,
+            exponential_average_factor,
+            result_running_mean,
+            result_running_variance,
+            epsilon,
+            result_save_mean,
+            result_save_inv_variance,
+        ))
+    }
+
+    pub(crate) unsafe fn batch_normalization_backward(
+        handle: cudnnHandle_t,
+        mode: cudnnBatchNormMode_t,
+        alpha_data_diff: *const ::std::os::raw::c_void,
+        beta_data_diff: *const ::std::os::raw::c_void,
+        alpha_param_diff: *const ::std::os::raw::c_void,
+        beta_param_diff: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        dy_desc: cudnnTensorDescriptor_t,
+        dy: *const ::std::os::raw::c_void,
+        dx_desc: cudnnTensorDescriptor_t,
+        dx: *mut ::std::os::raw::c_void,
+        d_bn_scale_bias_desc: cudnnTensorDescriptor_t,
+        bn_scale: *const ::std::os::raw::c_void,
+        d_bn_scale_result: *mut ::std::os::raw::c_void,
+        d_bn_bias_result: *mut ::std::os::raw::c_void,
+        epsilon: f64,
+        saved_mean: *const ::std::os::raw::c_void,
+        saved_inv_variance: *const ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        status9_to_8(super::dnn9::batch_normalization_backward(
+            handle as cuda_types::cudnn9::cudnnHandle_t,
+            mem::transmute(mode),
+            alpha_data_diff,
+            beta_data_diff,
+            alpha_param_diff,
+            beta_param_diff,
+            x_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            x,
+            dy_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            dy,
+            dx_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            dx,
+            d_bn_scale_bias_desc as cuda_types::cudnn9::cudnnTensorDescriptor_t,
+            bn_scale,
+            d_bn_scale_result,
+            d_bn_bias_result,
+            epsilon,
+            saved_mean,
+            saved_inv_variance,
         ))
     }
 
@@ -1661,6 +2029,112 @@ pub mod dnn9 {
             estimated_mean,
             estimated_variance,
             epsilon,
+        )
+    }
+
+    pub(crate) unsafe fn activation_backward(
+        handle: cudnnHandle_t,
+        activation_desc: cudnnActivationDescriptor_t,
+        alpha: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *const ::std::os::raw::c_void,
+        dy_desc: cudnnTensorDescriptor_t,
+        dy: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        dx_desc: cudnnTensorDescriptor_t,
+        dx: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        super::activation_backward(handle, activation_desc, alpha, y_desc, y, dy_desc, dy, x_desc, x, beta, dx_desc, dx)
+    }
+
+    pub(crate) unsafe fn softmax_backward(
+        handle: cudnnHandle_t,
+        algo: cudnnSoftmaxAlgorithm_t,
+        mode: cudnnSoftmaxMode_t,
+        alpha: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *const ::std::os::raw::c_void,
+        dy_desc: cudnnTensorDescriptor_t,
+        dy: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        dx_desc: cudnnTensorDescriptor_t,
+        dx: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        super::softmax_backward(handle, algo, mode, alpha, y_desc, y, dy_desc, dy, beta, dx_desc, dx)
+    }
+
+    pub(crate) unsafe fn pooling_backward(
+        handle: cudnnHandle_t,
+        pooling_desc: cudnnPoolingDescriptor_t,
+        alpha: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *const ::std::os::raw::c_void,
+        dy_desc: cudnnTensorDescriptor_t,
+        dy: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        dx_desc: cudnnTensorDescriptor_t,
+        dx: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        super::pooling_backward(handle, pooling_desc, alpha, y_desc, y, dy_desc, dy, x_desc, x, beta, dx_desc, dx)
+    }
+
+    pub(crate) unsafe fn batch_normalization_forward_training(
+        handle: cudnnHandle_t,
+        mode: cudnnBatchNormMode_t,
+        alpha: *const ::std::os::raw::c_void,
+        beta: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        y_desc: cudnnTensorDescriptor_t,
+        y: *mut ::std::os::raw::c_void,
+        bn_scale_bias_mean_var_desc: cudnnTensorDescriptor_t,
+        bn_scale: *const ::std::os::raw::c_void,
+        bn_bias: *const ::std::os::raw::c_void,
+        exponential_average_factor: f64,
+        result_running_mean: *mut ::std::os::raw::c_void,
+        result_running_variance: *mut ::std::os::raw::c_void,
+        epsilon: f64,
+        result_save_mean: *mut ::std::os::raw::c_void,
+        result_save_inv_variance: *mut ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        super::batch_normalization_forward_training(
+            handle, mode, alpha, beta, x_desc, x, y_desc, y,
+            bn_scale_bias_mean_var_desc, bn_scale, bn_bias,
+            exponential_average_factor, result_running_mean, result_running_variance,
+            epsilon, result_save_mean, result_save_inv_variance,
+        )
+    }
+
+    pub(crate) unsafe fn batch_normalization_backward(
+        handle: cudnnHandle_t,
+        mode: cudnnBatchNormMode_t,
+        alpha_data_diff: *const ::std::os::raw::c_void,
+        beta_data_diff: *const ::std::os::raw::c_void,
+        alpha_param_diff: *const ::std::os::raw::c_void,
+        beta_param_diff: *const ::std::os::raw::c_void,
+        x_desc: cudnnTensorDescriptor_t,
+        x: *const ::std::os::raw::c_void,
+        dy_desc: cudnnTensorDescriptor_t,
+        dy: *const ::std::os::raw::c_void,
+        dx_desc: cudnnTensorDescriptor_t,
+        dx: *mut ::std::os::raw::c_void,
+        d_bn_scale_bias_desc: cudnnTensorDescriptor_t,
+        bn_scale: *const ::std::os::raw::c_void,
+        d_bn_scale_result: *mut ::std::os::raw::c_void,
+        d_bn_bias_result: *mut ::std::os::raw::c_void,
+        epsilon: f64,
+        saved_mean: *const ::std::os::raw::c_void,
+        saved_inv_variance: *const ::std::os::raw::c_void,
+    ) -> cudnnStatus_t {
+        super::batch_normalization_backward(
+            handle, mode, alpha_data_diff, beta_data_diff, alpha_param_diff, beta_param_diff,
+            x_desc, x, dy_desc, dy, dx_desc, dx,
+            d_bn_scale_bias_desc, bn_scale, d_bn_scale_result, d_bn_bias_result,
+            epsilon, saved_mean, saved_inv_variance,
         )
     }
 

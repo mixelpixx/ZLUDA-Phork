@@ -80,8 +80,11 @@ macro_rules! dual_function_declarations {
 dual_function_declarations! {
     unimplemented,
     (implemented_dnn8|implemented_dnn9) <= [
+        cudnnActivationBackward,
         cudnnActivationForward,
+        cudnnBatchNormalizationBackward,
         cudnnBatchNormalizationForwardInference,
+        cudnnBatchNormalizationForwardTraining,
         cudnnCreateActivationDescriptor,
         cudnnCreatePoolingDescriptor,
         cudnnDeriveBNTensorDescriptor,
@@ -91,9 +94,11 @@ dual_function_declarations! {
         cudnnGetConvolutionForwardAlgorithm_v7,
         cudnnGetErrorString,
         cudnnGetPooling2dDescriptor,
+        cudnnPoolingBackward,
         cudnnPoolingForward,
         cudnnSetActivationDescriptor,
         cudnnSetPooling2dDescriptor,
+        cudnnSoftmaxBackward,
         cudnnSoftmaxForward
     ],
     implemented_no_conversion <= [
