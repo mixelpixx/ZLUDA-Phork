@@ -1854,6 +1854,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "hipfft-sys"
+version = "0.0.0"
+dependencies = [
+ "hip_runtime-sys",
+]
+
+[[package]]
 name = "hipsparse-sys"
 version = "0.0.0"
 dependencies = [
@@ -4080,6 +4087,8 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "hip_runtime-sys",
+ "hipfft-sys",
 ]
 
 [[package]]

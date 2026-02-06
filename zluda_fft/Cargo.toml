@@ -10,6 +10,8 @@ name = "cufft"
 [dependencies]
 cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
+hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
+hipfft-sys = { path = "../ext/hipfft-sys" }
 
 [package.metadata.zluda]
 linux_symlinks = [

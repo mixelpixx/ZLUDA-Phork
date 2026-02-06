@@ -10,6 +10,7 @@ members = [
     "ext/highs-sys",
     "ext/hip_runtime-sys",
     "ext/hipblaslt-sys",
+    "ext/hipfft-sys",
     "ext/hipsparse-sys",
     "ext/miopen-sys",
     "ext/rocblas-sys",

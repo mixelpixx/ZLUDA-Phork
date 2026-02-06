@@ -253,6 +253,11 @@ pub fn cudnn_normalize_fn(tokens: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
+pub fn cufft_normalize_fn(tokens: TokenStream) -> TokenStream {
+    normalize_fn_impl("cufft", None, tokens)
+}
+
+#[proc_macro]
 pub fn cusparse_normalize_fn(tokens: TokenStream) -> TokenStream {
     normalize_fn_impl("cusparse", None, tokens)
 }
