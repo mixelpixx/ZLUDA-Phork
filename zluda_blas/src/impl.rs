@@ -549,6 +549,100 @@ pub(crate) fn daxpy_v2(
     Ok(())
 }
 
+pub(crate) fn sdot_v2(
+    handle: &Handle,
+    n: ::core::ffi::c_int,
+    x: *const f32,
+    incx: ::core::ffi::c_int,
+    y: *const f32,
+    incy: ::core::ffi::c_int,
+    result: *mut f32,
+) -> cublasStatus_t {
+    unsafe { rocblas_sdot(handle.handle, n, x, incx, y, incy, result) }?;
+    Ok(())
+}
+
+pub(crate) fn ddot_v2(
+    handle: &Handle,
+    n: ::core::ffi::c_int,
+    x: *const f64,
+    incx: ::core::ffi::c_int,
+    y: *const f64,
+    incy: ::core::ffi::c_int,
+    result: *mut f64,
+) -> cublasStatus_t {
+    unsafe { rocblas_ddot(handle.handle, n, x, incx, y, incy, result) }?;
+    Ok(())
+}
+
+pub(crate) fn snrm2_v2(
+    handle: &Handle,
+    n: ::core::ffi::c_int,
+    x: *const f32,
+    incx: ::core::ffi::c_int,
+    result: *mut f32,
+) -> cublasStatus_t {
+    unsafe { rocblas_snrm2(handle.handle, n, x, incx, result) }?;
+    Ok(())
+}
+
+pub(crate) fn dnrm2_v2(
+    handle: &Handle,
+    n: ::core::ffi::c_int,
+    x: *const f64,
+    incx: ::core::ffi::c_int,
+    result: *mut f64,
+) -> cublasStatus_t {
+    unsafe { rocblas_dnrm2(handle.handle, n, x, incx, result) }?;
+    Ok(())
+}
+
+pub(crate) fn sasum_v2(
+    handle: &Handle,
+    n: ::core::ffi::c_int,
+    x: *const f32,
+    incx: ::core::ffi::c_int,
+    result: *mut f32,
+) -> cublasStatus_t {
+    unsafe { rocblas_sasum(handle.handle, n, x, incx, result) }?;
+    Ok(())
+}
+
+pub(crate) fn dasum_v2(
+    handle: &Handle,
+    n: ::core::ffi::c_int,
+    x: *const f64,
+    incx: ::core::ffi::c_int,
+    result: *mut f64,
+) -> cublasStatus_t {
+    unsafe { rocblas_dasum(handle.handle, n, x, incx, result) }?;
+    Ok(())
+}
+
+pub(crate) fn scopy_v2(
+    handle: &Handle,
+    n: ::core::ffi::c_int,
+    x: *const f32,
+    incx: ::core::ffi::c_int,
+    y: *mut f32,
+    incy: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_scopy(handle.handle, n, x, incx, y, incy) }?;
+    Ok(())
+}
+
+pub(crate) fn dcopy_v2(
+    handle: &Handle,
+    n: ::core::ffi::c_int,
+    x: *const f64,
+    incx: ::core::ffi::c_int,
+    y: *mut f64,
+    incy: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_dcopy(handle.handle, n, x, incx, y, incy) }?;
+    Ok(())
+}
+
 pub(crate) unsafe fn get_vector(
     n: ::core::ffi::c_int,
     elem_size: ::core::ffi::c_int,
@@ -596,4 +690,158 @@ pub(crate) fn dgemv_v2(
 ) -> cublasStatus_t {
     unsafe { rocblas_dgemv(handle.handle, trans, m, n, alpha, a, lda, x, incx, beta, y, incy) }?;
     Ok(())
+}
+
+// BLAS Level 3 operations (beyond GEMM)
+
+pub(crate) fn strsm_v2(
+    handle: &Handle,
+    side: rocblas_side,
+    uplo: rocblas_fill,
+    trans: rocblas_operation,
+    diag: rocblas_diagonal,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    alpha: *const f32,
+    a: *const f32,
+    lda: ::core::ffi::c_int,
+    b: *mut f32,
+    ldb: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_strsm(handle.handle, side, uplo, trans, diag, m, n, alpha, a, lda, b, ldb) }?;
+    Ok(())
+}
+
+pub(crate) fn dtrsm_v2(
+    handle: &Handle,
+    side: rocblas_side,
+    uplo: rocblas_fill,
+    trans: rocblas_operation,
+    diag: rocblas_diagonal,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    alpha: *const f64,
+    a: *const f64,
+    lda: ::core::ffi::c_int,
+    b: *mut f64,
+    ldb: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_dtrsm(handle.handle, side, uplo, trans, diag, m, n, alpha, a, lda, b, ldb) }?;
+    Ok(())
+}
+
+pub(crate) fn ssymm_v2(
+    handle: &Handle,
+    side: rocblas_side,
+    uplo: rocblas_fill,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    alpha: *const f32,
+    a: *const f32,
+    lda: ::core::ffi::c_int,
+    b: *const f32,
+    ldb: ::core::ffi::c_int,
+    beta: *const f32,
+    c: *mut f32,
+    ldc: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_ssymm(handle.handle, side, uplo, m, n, alpha, a, lda, b, ldb, beta, c, ldc) }?;
+    Ok(())
+}
+
+pub(crate) fn dsymm_v2(
+    handle: &Handle,
+    side: rocblas_side,
+    uplo: rocblas_fill,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    alpha: *const f64,
+    a: *const f64,
+    lda: ::core::ffi::c_int,
+    b: *const f64,
+    ldb: ::core::ffi::c_int,
+    beta: *const f64,
+    c: *mut f64,
+    ldc: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_dsymm(handle.handle, side, uplo, m, n, alpha, a, lda, b, ldb, beta, c, ldc) }?;
+    Ok(())
+}
+
+pub(crate) fn ssyrk_v2(
+    handle: &Handle,
+    uplo: rocblas_fill,
+    trans: rocblas_operation,
+    n: ::core::ffi::c_int,
+    k: ::core::ffi::c_int,
+    alpha: *const f32,
+    a: *const f32,
+    lda: ::core::ffi::c_int,
+    beta: *const f32,
+    c: *mut f32,
+    ldc: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_ssyrk(handle.handle, uplo, trans, n, k, alpha, a, lda, beta, c, ldc) }?;
+    Ok(())
+}
+
+pub(crate) fn dsyrk_v2(
+    handle: &Handle,
+    uplo: rocblas_fill,
+    trans: rocblas_operation,
+    n: ::core::ffi::c_int,
+    k: ::core::ffi::c_int,
+    alpha: *const f64,
+    a: *const f64,
+    lda: ::core::ffi::c_int,
+    beta: *const f64,
+    c: *mut f64,
+    ldc: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe { rocblas_dsyrk(handle.handle, uplo, trans, n, k, alpha, a, lda, beta, c, ldc) }?;
+    Ok(())
+}
+
+// Half-precision batched operations
+
+pub(crate) unsafe fn hgemm_strided_batched(
+    handle: &Handle,
+    transa: rocblas_operation,
+    transb: rocblas_operation,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    k: ::core::ffi::c_int,
+    alpha: *const cuda_types::cublas::__half,
+    a: *const cuda_types::cublas::__half,
+    lda: ::core::ffi::c_int,
+    stride_a: ::core::ffi::c_longlong,
+    b: *const cuda_types::cublas::__half,
+    ldb: ::core::ffi::c_int,
+    stride_b: ::core::ffi::c_longlong,
+    beta: *const cuda_types::cublas::__half,
+    c: *mut cuda_types::cublas::__half,
+    ldc: ::core::ffi::c_int,
+    stride_c: ::core::ffi::c_longlong,
+    batch_count: ::core::ffi::c_int,
+) -> rocblas_status {
+    rocblas_hgemm_strided_batched(
+        handle.handle,
+        transa,
+        transb,
+        m,
+        n,
+        k,
+        alpha.cast(),
+        a.cast(),
+        lda,
+        stride_a,
+        b.cast(),
+        ldb,
+        stride_b,
+        beta.cast(),
+        c.cast(),
+        ldc,
+        stride_c,
+        batch_count,
+    )
 }

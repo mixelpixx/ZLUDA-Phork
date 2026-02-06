@@ -370,6 +370,37 @@ impl<'a, E: CudaErrorType> FromCuda<'a, rocblas_math_mode, E> for cublasMath_t {
     }
 }
 
+impl<'a, E: CudaErrorType> FromCuda<'a, cublasFillMode_t, E> for rocblas_fill {
+    fn from_cuda(t: &'a cublasFillMode_t) -> Result<Self, E> {
+        Ok(match *t {
+            cublasFillMode_t::CUBLAS_FILL_MODE_LOWER => rocblas_fill::rocblas_fill_lower,
+            cublasFillMode_t::CUBLAS_FILL_MODE_UPPER => rocblas_fill::rocblas_fill_upper,
+            cublasFillMode_t::CUBLAS_FILL_MODE_FULL => rocblas_fill::rocblas_fill_full,
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cublasSideMode_t, E> for rocblas_side {
+    fn from_cuda(t: &'a cublasSideMode_t) -> Result<Self, E> {
+        Ok(match *t {
+            cublasSideMode_t::CUBLAS_SIDE_LEFT => rocblas_side::rocblas_side_left,
+            cublasSideMode_t::CUBLAS_SIDE_RIGHT => rocblas_side::rocblas_side_right,
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cublasDiagType_t, E> for rocblas_diagonal {
+    fn from_cuda(t: &'a cublasDiagType_t) -> Result<Self, E> {
+        Ok(match *t {
+            cublasDiagType_t::CUBLAS_DIAG_NON_UNIT => rocblas_diagonal::rocblas_diagonal_non_unit,
+            cublasDiagType_t::CUBLAS_DIAG_UNIT => rocblas_diagonal::rocblas_diagonal_unit,
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
 impl<'a, E: CudaErrorType> FromCuda<'a, cuda_types::cublas::cudaDataType, E> for rocblas_datatype {
     fn from_cuda(mode: &'a cuda_types::cublas::cudaDataType) -> Result<Self, E> {
         Ok(match *mode {
