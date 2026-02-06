@@ -49,6 +49,17 @@ then cd to the directory with this file and run this simple command:
 #include <hip/amd_detail/amd_device_functions.h>
 #include <hip/hip_fp8.h>
 
+// ROCm 6.2 compatibility: FP8 enum/type names use _FNUZ suffix
+#ifndef __HIP_E4M3
+#define __HIP_E4M3 __HIP_E4M3_FNUZ
+#endif
+#ifndef __HIP_E5M2
+#define __HIP_E5M2 __HIP_E5M2_FNUZ
+#endif
+// ROCm 6.2 uses _fnuz suffixed struct types
+using __hip_fp8x2_e4m3 = __hip_fp8x2_e4m3_fnuz;
+using __hip_fp8x2_e5m2 = __hip_fp8x2_e5m2_fnuz;
+
 #define SHARED_SPACE __attribute__((address_space(3)))
 #define CONSTANT_SPACE __attribute__((address_space(4)))
 
@@ -823,6 +834,30 @@ __device__ float dot_product<float, f16x2>(float initial_value, f16x2 row[8], f1
     return result;
 }
 
+// dot_product_4: 4-element version for m16n8k8 (half the k-dimension of m16n8k16)
+template <typename Acc, typename T>
+__device__ static Acc dot_product_4(Acc initial_value, T row[4], T column[4]);
+
+template <>
+__device__ float dot_product_4<float, f16x2>(float initial_value, f16x2 row[4], f16x2 column[4])
+{
+    float result = initial_value;
+    for (int i = 0; i < 4; i++)
+    {
+        // ockl bug
+        if (__oclc_ISA_version == 10103)
+        {
+            result = std::fma(float(row[i].x), float(column[i].x), result);
+            result = std::fma(float(row[i].y), float(column[i].y), result);
+        }
+        else
+        {
+            result = __ockl_fdot2(row[i], column[i], result, false);
+        }
+    }
+    return result;
+}
+
 // Template function because DPP mask must be a compile time constant
 template <typename T, const int DPP_MASK>
 __device__ static void mma_load_rowcol(T upper_row[8], T lower_row[8], T left_column[8], T right_column[8],
@@ -912,6 +947,48 @@ __device__ HIP_vector_base<Acc, 4> fallback_mma_sync_aligned(uint4::Native_vec_ 
     return {d0, d1, d2, d3};
 }
 
+// m16n8k8 variant: half the k-dimension of m16n8k16
+// A = uint2 (2x u32), B = uint32_t (1x u32), C/D = float4 (4x f32)
+template <typename Acc, typename T>
+__device__ HIP_vector_base<Acc, 4> fallback_mma_sync_aligned_m16n8k8(uint2::Native_vec_ a_reg, uint32_t b_reg, HIP_vector_base<Acc, 4> c_reg)
+{
+    uint8_t laneid = uint8_t(FUNC_CALL(sreg_laneid)());
+    uint8_t quad_index = laneid % 4;
+    const Acc c0 = c_reg.x;
+    const Acc c1 = c_reg.y;
+    const Acc c2 = c_reg.z;
+    const Acc c3 = c_reg.w;
+    uint8_t left_column_start = quad_index * 8;
+    T upper_row[4];
+    T lower_row[4];
+    T left_column[4];
+    T right_column[4];
+    mma_load_col<T>(upper_row, lower_row, left_column, right_column,
+                    0, left_column_start,
+                    a_reg[0], a_reg[1],
+                    b_reg);
+    mma_load_rowcol<T, 0b00'11'10'01>(upper_row, lower_row, left_column, right_column,
+                                      1, left_column_start,
+                                      1,
+                                      a_reg[0], a_reg[1],
+                                      b_reg);
+    mma_load_rowcol<T, 0b01'00'11'10>(upper_row, lower_row, left_column, right_column,
+                                      2, left_column_start,
+                                      2,
+                                      a_reg[0], a_reg[1],
+                                      b_reg);
+    mma_load_rowcol<T, 0b10'01'00'11>(upper_row, lower_row, left_column, right_column,
+                                      3, left_column_start,
+                                      3,
+                                      a_reg[0], a_reg[1],
+                                      b_reg);
+    Acc d0 = dot_product_4<Acc, T>(c0, upper_row, left_column);
+    Acc d1 = dot_product_4<Acc, T>(c1, upper_row, right_column);
+    Acc d2 = dot_product_4<Acc, T>(c2, lower_row, left_column);
+    Acc d3 = dot_product_4<Acc, T>(c3, lower_row, right_column);
+    return {d0, d1, d2, d3};
+}
+
 extern "C"
 {
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
@@ -954,6 +1031,30 @@ extern "C"
             [[clang::always_inline]] return __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32_optnone(a_reg, b_reg, c_reg);
         }
         return std::bit_cast<uint4::Native_vec_>(fallback_mma_sync_aligned<int32_t, s8x4>(a_reg, b_reg, std::bit_cast<HIP_vector_base<int32_t, 4>>(c_reg)));
+    }
+}
+
+// m16n8k8 entry points
+extern "C"
+{
+    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k8_row_col_f32_f16_f16_f32)(uint2::Native_vec_ a_reg, uint32_t b_reg, float4::Native_vec_ c_reg)
+    {
+        return fallback_mma_sync_aligned_m16n8k8<float, f16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
+    }
+
+    uint2::Native_vec_ FUNC(mma_sync_aligned_m16n8k8_row_col_f16_f16_f16_f16)(uint2::Native_vec_ a_reg, uint32_t b_reg, uint2::Native_vec_ c_reg)
+    {
+        // C/D are packed f16x2 in u32 registers. Unpack C to f32 for computation, then repack.
+        f16x2 c0 = std::bit_cast<f16x2>(c_reg[0]);
+        f16x2 c1 = std::bit_cast<f16x2>(c_reg[1]);
+        HIP_vector_base<float, 4> c_float(float(c0.x), float(c0.y), float(c1.x), float(c1.y));
+        auto result = fallback_mma_sync_aligned_m16n8k8<float, f16x2>(a_reg, b_reg, c_float);
+        f16x2 d0 = {_Float16(result.x), _Float16(result.y)};
+        f16x2 d1 = {_Float16(result.z), _Float16(result.w)};
+        uint2::Native_vec_ d_reg;
+        d_reg[0] = std::bit_cast<uint32_t>(d0);
+        d_reg[1] = std::bit_cast<uint32_t>(d1);
+        return d_reg;
     }
 }
 

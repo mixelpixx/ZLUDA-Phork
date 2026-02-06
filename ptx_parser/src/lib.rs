@@ -4023,6 +4023,32 @@ derive_parser!(
     .action: GridDepControlAction  = { .launch_dependents, .wait };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-mma
+    mma.sync.aligned.m16n8k8.alayout.blayout.f32.f16.f16.f32 d, a, b, c => {
+        Instruction::Mma {
+            data: MmaDetails {
+                alayout,
+                blayout,
+                cd_type_scalar: ScalarType::F32,
+                ab_type_scalar: ScalarType::F16,
+                dimension: MmaDimension::M16n8k8,
+            },
+            arguments: MmaArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    mma.sync.aligned.m16n8k8.alayout.blayout.f16.f16.f16.f16 d, a, b, c => {
+        Instruction::Mma {
+            data: MmaDetails {
+                alayout,
+                blayout,
+                cd_type_scalar: ScalarType::F16,
+                ab_type_scalar: ScalarType::F16,
+                dimension: MmaDimension::M16n8k8,
+            },
+            arguments: MmaArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
     mma.sync.aligned.m16n8k16.alayout.blayout.f32.bf16.bf16.f32 d, a, b, c => {
         Instruction::Mma {
             data: MmaDetails {
@@ -4030,6 +4056,7 @@ derive_parser!(
                 blayout,
                 cd_type_scalar: ScalarType::F32,
                 ab_type_scalar: ScalarType::BF16,
+                dimension: MmaDimension::M16n8k16,
             },
             arguments: MmaArgs { dst: d, src1: a, src2: b, src3: c }
         }
@@ -4042,6 +4069,7 @@ derive_parser!(
                 blayout,
                 cd_type_scalar: ScalarType::F32,
                 ab_type_scalar: ScalarType::F16,
+                dimension: MmaDimension::M16n8k16,
             },
             arguments: MmaArgs { dst: d, src1: a, src2: b, src3: c }
         }
@@ -4054,6 +4082,7 @@ derive_parser!(
                 blayout,
                 cd_type_scalar: ScalarType::S32,
                 ab_type_scalar: ScalarType::S8,
+                dimension: MmaDimension::M16n8k32,
             },
             arguments: MmaArgs { dst: d, src1: a, src2: b, src3: c }
         }

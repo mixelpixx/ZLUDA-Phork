@@ -2710,33 +2710,43 @@ pub struct ReduxSyncData {
     pub reduction: Reduction,
 }
 
+#[derive(Clone, Copy)]
+pub enum MmaDimension {
+    M16n8k8,
+    M16n8k16,
+    M16n8k32,
+}
+
 pub struct MmaDetails {
     pub alayout: MatrixLayout,
     pub blayout: MatrixLayout,
     pub cd_type_scalar: ScalarType,
     pub ab_type_scalar: ScalarType,
+    pub dimension: MmaDimension,
 }
 
 impl MmaDetails {
     pub fn dtype(&self) -> Type {
-        if self.cd_type_scalar.kind() == ScalarKind::Float {
-            Type::Vector(4, ScalarType::F32)
-        } else {
-            Type::Vector(4, ScalarType::U32)
+        match (self.dimension, self.cd_type_scalar) {
+            (MmaDimension::M16n8k8, ScalarType::F16) => Type::Vector(2, ScalarType::U32),
+            (_, cd) if cd.kind() == ScalarKind::Float => Type::Vector(4, ScalarType::F32),
+            _ => Type::Vector(4, ScalarType::U32),
         }
     }
     pub fn atype(&self) -> Type {
-        Type::Vector(4, ScalarType::U32)
+        match self.dimension {
+            MmaDimension::M16n8k8 => Type::Vector(2, ScalarType::U32),
+            _ => Type::Vector(4, ScalarType::U32),
+        }
     }
     pub fn btype(&self) -> Type {
-        Type::Vector(2, ScalarType::U32)
+        match self.dimension {
+            MmaDimension::M16n8k8 => Type::Scalar(ScalarType::U32),
+            _ => Type::Vector(2, ScalarType::U32),
+        }
     }
     pub fn ctype(&self) -> Type {
-        if self.cd_type_scalar.kind() == ScalarKind::Float {
-            Type::Vector(4, ScalarType::F32)
-        } else {
-            Type::Vector(4, ScalarType::U32)
-        }
+        self.dtype()
     }
 }
 

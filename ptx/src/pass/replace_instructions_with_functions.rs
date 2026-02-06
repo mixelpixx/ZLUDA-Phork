@@ -369,15 +369,16 @@ fn run_instruction<'input>(
                     blayout,
                     cd_type_scalar,
                     ab_type_scalar,
+                    dimension,
                 },
             ..
         } => {
             let cd_type_name = scalar_to_ptx_name(cd_type_scalar);
             let ab_type_name = scalar_to_ptx_name(ab_type_scalar);
-            let dimensions = if cd_type_scalar.kind() == ast::ScalarKind::Float {
-                "m16n8k16"
-            } else {
-                "m16n8k32"
+            let dimensions = match dimension {
+                ast::MmaDimension::M16n8k8 => "m16n8k8",
+                ast::MmaDimension::M16n8k16 => "m16n8k16",
+                ast::MmaDimension::M16n8k32 => "m16n8k32",
             };
             let name = format!(
                 "mma_sync_aligned_{dimensions}_{}_{}_{cd_type_name}_{ab_type_name}_{ab_type_name}_{cd_type_name}",

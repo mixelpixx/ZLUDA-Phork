@@ -74,6 +74,14 @@ pub(crate) unsafe fn set_attribute(
         | CUfunction_attribute::CU_FUNC_ATTRIBUTE_BINARY_VERSION => {
             return hipError_t::ErrorNotSupported;
         }
+        // MaxDynamicSharedMemorySize and SharedMemoryCarveout are NVIDIA-specific
+        // optimization hints. On AMD GPUs, LDS allocation is configured at launch
+        // time via sharedMemBytes. hipFuncSetAttribute doesn't work with
+        // hipFunction_t handles (expects a kernel pointer), so return success.
+        CUfunction_attribute::CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES
+        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT => {
+            return hipError_t::Success;
+        }
         _ => {}
     }
     hipFuncSetAttribute(func.0.cast(), hipFuncAttribute(attribute.0), value)
