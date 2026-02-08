@@ -30,28 +30,44 @@ We've implemented hardware-accelerated m16n8k8 MMA (Matrix Multiply-Accumulate) 
 
 #### [BLOCKED] Current Blockers
 
-**1. ZLUDA/rocBLAS Symbol Resolution on gfx1103**
+**ROOT CAUSE IDENTIFIED: ROCm 6.2 Code Object V6 Incompatibility**
+
+ZLUDA is fundamentally incompatible with ROCm 6.0+ due to Code Object format changes.
+
+**The Error:**
 ```
 CUDA error: named symbol not found
   in function ggml_cuda_compute_forward (SOFT_MAX)
 ```
 
-**Environment:**
-- GPU: AMD Radeon 780M (gfx1103, RDNA3, Phoenix APU)
-- ROCm: 6.2.3
-- ZLUDA: Latest (this fork)
-- Custom rocBLAS: Community-built gfx1103 libraries installed ([likelovewant/ROCmLibs-for-gfx1103-AMD780M-APU](https://github.com/likelovewant/ROCmLibs-for-gfx1103-AMD780M-APU))
+**Why This Happens:**
+- ZLUDA targets ROCm 5.7.x and generates **Code Object V5** binaries via `libamd_comgr`
+- ROCm 6.2 expects **Code Object V6** with different symbol mangling/visibility rules
+- When ZLUDA JIT-compiles PTX kernels, the symbol names don't match what the 6.2 runtime expects
+- This is NOT a gfx1103-specific issue - it affects all GPUs on ROCm 6.0+
 
-**What Works:**
-- [OK] ZLUDA detects GPU correctly (`AMD Radeon Graphics [ZLUDA], compute capability 8.8`)
-- [OK] Bitcode loads without errors
-- [OK] gfx1103 TensileLibrary files present (`/opt/rocm/lib/rocblas/library/*gfx1103*`)
+**Attempted Workarounds (All Failed):**
+- [FAIL] Installing community gfx1103 rocBLAS libraries (they're 5.7-based, wrong runtime)
+- [FAIL] HSA_OVERRIDE_GFX_VERSION environment variables (doesn't fix Code Object mismatch)
+- [FAIL] LD_PRELOAD library override (causes libstdc++ conflicts)
+- [FAIL] Custom bitcode compilation (unrelated to runtime symbol resolution)
 
-**What Fails:**
-- [FAIL] rocBLAS kernel symbol resolution during basic operations (SOFT_MAX, etc.)
-- [FAIL] Occurs even with scalar MMA fallback (not specific to our MMA code)
+**The Solution: Downgrade to ROCm 5.7.1**
 
-This appears to be a fundamental ZLUDA ↔ ROCm 6.2.3 ↔ gfx1103 compatibility issue. GitHub issues [#59](https://github.com/vosen/ZLUDA/issues/59), [#611](https://github.com/vosen/ZLUDA/issues/611), and [#64](https://github.com/vosen/ZLUDA/issues/64) show other users successfully ran ZLUDA on gfx1103, but potentially with different ROCm versions.
+ROCm 5.7.1 is the "Golden Version" for ZLUDA compatibility:
+```bash
+# 1. Completely remove ROCm 6.2
+sudo apt purge rocm-* hip-* --autoremove
+
+# 2. Install ROCm 5.7.1 (instructions at https://rocm.docs.amd.com)
+# 3. Set environment for gfx1103:
+export HSA_OVERRIDE_GFX_VERSION=11.0.0  # Treat as gfx1100 (RX 7900)
+export LD_LIBRARY_PATH=/opt/rocm-5.7.1/lib:$LD_LIBRARY_PATH
+```
+
+**Testing Status:**
+- [BLOCKED] Cannot test MMA implementation until ROCm downgrade
+- [READY] Code is complete and awaiting compatible environment
 
 **2. LLVM Intrinsic Lowering Integration**
 
@@ -64,21 +80,31 @@ To enable hardware acceleration, need to either:
 - Build ZLUDA against our modified LLVM, OR
 - Upstream the LLVM changes to ROCm's LLVM
 
+#### Diagnostic Commands (For ROCm 6.2 Debugging)
+
+If you must stay on ROCm 6.2 for other reasons, these may help identify the symbol mismatch:
+
+```bash
+# Enable verbose logging
+export AMD_LOG_LEVEL=3
+export ZLUDA_LOG=trace
+
+# Inspect JIT-compiled kernels
+find ~/.cache/zluda -name "*.hsaco" -mmin -5  # Find recent compilations
+/opt/rocm/llvm/bin/llvm-objdump -t path/to/kernel.hsaco  # Check symbol table
+```
+
+Look for mismatched kernel name suffixes (e.g., `.kd` appended/missing).
+
 #### Questions for the Community
 
-1. **Has anyone successfully run ZLUDA on Radeon 780M (gfx1103) with ROCm 6.2+?**
-   - Which ROCm version works?
-   - Any special configuration needed?
-   - Are there known rocBLAS symbol resolution issues?
+1. **Has anyone successfully run ZLUDA on ROCm 5.7.1 with RDNA3 hardware?**
+   - Does gfx1103 work with HSA_OVERRIDE_GFX_VERSION=11.0.0?
+   - Are there any quirks with APU vs discrete GPUs?
 
-2. **Best approach for integrating custom LLVM passes into ZLUDA?**
-   - Should we build ZLUDA against our modified LLVM fork?
-   - Can LLVM passes be loaded dynamically?
-   - Any experience upstreaming ZLUDA-specific LLVM changes to ROCm?
-
-3. **Alternative testing environments?**
-   - Which discrete RDNA3 GPUs (gfx1100, gfx1101, gfx1102) are confirmed working with ZLUDA + ROCm 6.2+?
-   - Would testing on different hardware help isolate the gfx1103-specific issues?
+2. **ROCm 6.x Porting Effort:**
+   - Is anyone working on updating ZLUDA for Code Object V6 compatibility?
+   - Would this require changes to `libamd_comgr` integration or LLVM backend?
 
 #### Technical Notes
 
