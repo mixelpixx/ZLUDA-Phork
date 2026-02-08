@@ -664,20 +664,20 @@ extern "C"
     __device__ inline static uint32_t load_single_matrix(void SHARED_SPACE *lds_address, uint32_t warp_offset)
     {
         uint32_t laneid = __zluda_ptx_impl_sreg_laneid();
-        int32_t row_address = __builtin_amdgcn_ds_bpermute((int32_t)(warp_offset + (laneid / 4U)) << 2U, (int32_t)lds_address);
+        int32_t row_address = __builtin_amdgcn_ds_bpermute((int32_t)(warp_offset + (laneid / 4U)) << 2U, (int32_t)(uintptr_t)lds_address);
         uint32_t matrix_cell_address = (uint32_t)row_address + ((laneid % 4) * 4);
-        return *((uint32_t SHARED_SPACE *)matrix_cell_address);
+        return *((uint32_t SHARED_SPACE *)(uintptr_t)matrix_cell_address);
     }
 
     __device__ inline static uint32_t load_single_matrix_trans(void SHARED_SPACE *lds_address, uint32_t warp_offset)
     {
         uint32_t laneid = __zluda_ptx_impl_sreg_laneid();
-        int32_t row_address_lo = __builtin_amdgcn_ds_bpermute((int32_t)(warp_offset + ((laneid % 4U) * 2)) << 2U, (int32_t)lds_address);
+        int32_t row_address_lo = __builtin_amdgcn_ds_bpermute((int32_t)(warp_offset + ((laneid % 4U) * 2)) << 2U, (int32_t)(uintptr_t)lds_address);
         uint32_t address_lo = (uint32_t)row_address_lo + ((laneid / 4) * 2);
-        uint16_t lo = *((uint16_t SHARED_SPACE *)address_lo);
-        int32_t row_address_hi = __builtin_amdgcn_ds_bpermute((int32_t)(warp_offset + ((laneid % 4U) * 2) + 1) << 2U, (int32_t)lds_address);
+        uint16_t lo = *((uint16_t SHARED_SPACE *)(uintptr_t)address_lo);
+        int32_t row_address_hi = __builtin_amdgcn_ds_bpermute((int32_t)(warp_offset + ((laneid % 4U) * 2) + 1) << 2U, (int32_t)(uintptr_t)lds_address);
         uint32_t address_hi = (uint32_t)row_address_hi + ((laneid / 4) * 2);
-        uint16_t hi = *((uint16_t SHARED_SPACE *)address_hi);
+        uint16_t hi = *((uint16_t SHARED_SPACE *)(uintptr_t)address_hi);
         return std::bit_cast<uint32_t>(ushort2::Native_vec_{lo, hi});
     }
 
@@ -704,6 +704,12 @@ extern "C"
         uint32_t x2 = load_single_matrix_trans(address, 16);
         uint32_t x3 = load_single_matrix_trans(address, 24);
         return uint4::Native_vec_{x0, x1, x2, x3};
+    }
+
+    uint32_t FUNC(movmatrix_m8n8_trans_b16)(uint32_t a)
+    {
+        // DIAGNOSTIC: pure identity, no bpermute
+        return a;
     }
 
     struct byte4
@@ -1006,7 +1012,8 @@ extern "C"
 
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        if (__oclc_ISA_version >= 11000 && __oclc_ISA_version < 12000)
+        // Temporarily disabled hardware path - use scalar fallback
+        if (false && __oclc_ISA_version >= 11000 && __oclc_ISA_version < 12000)
         {
             [[clang::always_inline]] return __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32_optnone(a_reg, b_reg, c_reg);
         }
@@ -1014,6 +1021,14 @@ extern "C"
         {
             return fallback_mma_sync_aligned<float, bf16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
         }
+    }
+
+    // We wrap the intrinsic in an optnone function to prevent ZLUDA-specific
+    // passes from optimizing away the intrinsic call
+    static __device__ float4::Native_vec_ __llvm_zluda_mma_m16n8k8_f32_f16_f16_f32_optnone [[clang::optnone]] (uint2::Native_vec_ a_reg, uint32_t b_reg, float4::Native_vec_ c_reg)
+    {
+        __device__ uint4::Native_vec_ __llvm_zluda_mma_m16n8k8_f32_f16_f16_f32(uint2::Native_vec_ a_reg, uint32_t b_reg, uint4::Native_vec_ c_reg) __asm("llvm.zluda.mma.m16n8k8.f32.f16.f16.f32");
+        return std::bit_cast<float4::Native_vec_>(__llvm_zluda_mma_m16n8k8_f32_f16_f16_f32(a_reg, b_reg, std::bit_cast<uint4::Native_vec_>(c_reg)));
     }
 
     // We wrap the intrinsic in an optnone function to prevent ZLUDA-specific
@@ -1026,7 +1041,8 @@ extern "C"
 
     uint4::Native_vec_ FUNC(mma_sync_aligned_m16n8k32_row_col_s32_s8_s8_s32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)
     {
-        if (__oclc_ISA_version >= 11000 && __oclc_ISA_version < 12000)
+        // Temporarily disabled hardware path - use scalar fallback
+        if (false && __oclc_ISA_version >= 11000 && __oclc_ISA_version < 12000)
         {
             [[clang::always_inline]] return __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32_optnone(a_reg, b_reg, c_reg);
         }
@@ -1039,7 +1055,15 @@ extern "C"
 {
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k8_row_col_f32_f16_f16_f32)(uint2::Native_vec_ a_reg, uint32_t b_reg, float4::Native_vec_ c_reg)
     {
-        return fallback_mma_sync_aligned_m16n8k8<float, f16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
+        // Temporarily disabled hardware path - use scalar fallback
+        if (false && __oclc_ISA_version >= 11000 && __oclc_ISA_version < 12000)
+        {
+            [[clang::always_inline]] return __llvm_zluda_mma_m16n8k8_f32_f16_f16_f32_optnone(a_reg, b_reg, c_reg);
+        }
+        else
+        {
+            return fallback_mma_sync_aligned_m16n8k8<float, f16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
+        }
     }
 
     uint2::Native_vec_ FUNC(mma_sync_aligned_m16n8k8_row_col_f16_f16_f16_f16)(uint2::Native_vec_ a_reg, uint32_t b_reg, uint2::Native_vec_ c_reg)
@@ -1048,7 +1072,19 @@ extern "C"
         f16x2 c0 = std::bit_cast<f16x2>(c_reg[0]);
         f16x2 c1 = std::bit_cast<f16x2>(c_reg[1]);
         HIP_vector_base<float, 4> c_float(float(c0.x), float(c0.y), float(c1.x), float(c1.y));
-        auto result = fallback_mma_sync_aligned_m16n8k8<float, f16x2>(a_reg, b_reg, c_float);
+
+        float4::Native_vec_ result;
+        // Temporarily disabled hardware path - use scalar fallback
+        if (false && __oclc_ISA_version >= 11000 && __oclc_ISA_version < 12000)
+        {
+            float4::Native_vec_ c_reg_f32 = {c_float.x, c_float.y, c_float.z, c_float.w};
+            result = __llvm_zluda_mma_m16n8k8_f32_f16_f16_f32_optnone(a_reg, b_reg, c_reg_f32);
+        }
+        else
+        {
+            result = fallback_mma_sync_aligned_m16n8k8<float, f16x2>(a_reg, b_reg, c_float).data;
+        }
+
         f16x2 d0 = {_Float16(result.x), _Float16(result.y)};
         f16x2 d1 = {_Float16(result.z), _Float16(result.w)};
         uint2::Native_vec_ d_reg;

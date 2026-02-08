@@ -44,16 +44,32 @@ fn get_best_ptx_and_compile(
             _ => {}
         })
     };
+    let mut debug_module_idx = 0usize;
     let maybe_module = ptx_modules
         .iter()
         .rev() // TODO: actually sort by SM
         .try_fold(
             None,
             |acc: Option<(&Cow<'_, str>, ptx_parser::Module<'_>)>, src| {
-                let maybe_ast = if cfg!(debug_assertions) {
-                    ptx_parser::parse_module_checked(src)
-                } else {
-                    Ok(ptx_parser::parse_module_unchecked(src))
+                debug_module_idx += 1;
+                let maybe_ast = {
+                    let result = ptx_parser::parse_module_checked(src);
+                    match &result {
+                        Err(ref errors) => {
+                            let error_strs: Vec<String> = errors.iter().map(|e| format!("{}", e)).collect();
+                            let _ = fs::write(
+                                format!("/tmp/zluda_parse_errors_{}.txt", debug_module_idx),
+                                format!("ERRORS ({}): {}\n{}", errors.len(), src.len(), error_strs.join("\n")),
+                            );
+                        }
+                        Ok(module) => {
+                            let _ = fs::write(
+                                format!("/tmp/zluda_parse_ok_{}.txt", debug_module_idx),
+                                format!("OK: invalid_directives={}, src_len={}", module.invalid_directives, src.len()),
+                            );
+                        }
+                    }
+                    result
                 };
                 match maybe_ast {
                     Err(_) => ControlFlow::Continue(acc),

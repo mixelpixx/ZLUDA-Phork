@@ -4014,6 +4014,13 @@ derive_parser!(
     // .dst_fmt = { .b8x16 };
     // .src_fmt = { .b6x16_p32, .b4x16_p64 };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-movmatrix
+    movmatrix.sync.aligned.m8n8.trans.b16 d, a => {
+        Instruction::MovMatrix {
+            arguments: MovMatrixArgs { dst: d, src: a }
+        }
+    }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-griddepcontrol
     griddepcontrol.action => {
         Instruction::GridDepControl {

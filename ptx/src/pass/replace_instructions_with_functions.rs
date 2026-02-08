@@ -535,6 +535,14 @@ fn run_instruction<'input>(
                 i,
             )?
         }
+        i @ ptx_parser::Instruction::MovMatrix { .. } => {
+            to_call(
+                resolver,
+                fn_declarations,
+                "movmatrix_m8n8_trans_b16".into(),
+                i,
+            )?
+        }
         i @ ptx_parser::Instruction::Prmt { .. } => {
             to_call(resolver, fn_declarations, "prmt_b32".into(), i)?
         }

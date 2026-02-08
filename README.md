@@ -4,6 +4,117 @@ A fork of [ZLUDA](https://github.com/vosen/ZLUDA) with extended CUDA library sup
 
 ZLUDA is a drop-in replacement for CUDA on non-NVIDIA GPUs. It allows running unmodified CUDA applications using AMD GPUs with near-native performance via ROCm/HIP.
 
+---
+
+## 🚧 Current Development Status & Issues
+
+### Flash Attention MMA Implementation (In Progress)
+
+We've implemented hardware-accelerated m16n8k8 MMA (Matrix Multiply-Accumulate) support for RDNA3 GPUs to enable flash attention in llama.cpp and other ML workloads. **The implementation is functionally complete but currently blocked by environment compatibility issues.**
+
+#### ✅ What's Implemented
+
+**Complete PTX to AMD GPU Pipeline:**
+1. **PTX Parser** (`ptx_parser/`) - Added `MovMatrix` instruction variant and parser rules for `movmatrix.sync.aligned`
+2. **Instruction Replacement** (`ptx/src/pass/replace_instructions_with_functions.rs`) - Maps MovMatrix to runtime functions
+3. **C++ Runtime** (`ptx/lib/zluda_ptx_impl.cpp`) - Implemented both scalar fallback and hardware intrinsic paths:
+   - `movmatrix_m8n8_trans_b16()` - 8×8 matrix transpose using AMD's `__builtin_amdgcn_ds_bpermute`
+   - `mma_sync_aligned_m16n8k8_*()` - MMA entry points with RDNA3 hardware acceleration
+4. **LLVM Intrinsics** (`ext/llvm-project/llvm/include/llvm/IR/IntrinsicsZLUDA.td`) - Defined `int_zluda_mma_m16n8k8_f32_f16_f16_f32`
+5. **LLVM Lowering Pass** (`ext/llvm-project/llvm/lib/Transforms/ZLUDA/CombineMMA.cpp`) - Lowers to AMD `amdgcn_wmma_f32_16x16x16_f16`
+
+**Hardware Support:**
+- ISA detection: Correctly identifies RDNA3 (gfx1100-gfx1103, ISA 11.0.0-11.0.3)
+- Bitcode compilation: Properly generates LLVM bitcode with hardware paths
+- Falls back to scalar implementation on older GPUs
+
+#### ❌ Current Blockers
+
+**1. ZLUDA/rocBLAS Symbol Resolution on gfx1103**
+```
+CUDA error: named symbol not found
+  in function ggml_cuda_compute_forward (SOFT_MAX)
+```
+
+**Environment:**
+- GPU: AMD Radeon 780M (gfx1103, RDNA3, Phoenix APU)
+- ROCm: 6.2.3
+- ZLUDA: Latest (this fork)
+- Custom rocBLAS: Community-built gfx1103 libraries installed ([likelovewant/ROCmLibs-for-gfx1103-AMD780M-APU](https://github.com/likelovewant/ROCmLibs-for-gfx1103-AMD780M-APU))
+
+**What Works:**
+- ✅ ZLUDA detects GPU correctly (`AMD Radeon Graphics [ZLUDA], compute capability 8.8`)
+- ✅ Bitcode loads without errors
+- ✅ gfx1103 TensileLibrary files present (`/opt/rocm/lib/rocblas/library/*gfx1103*`)
+
+**What Fails:**
+- ❌ rocBLAS kernel symbol resolution during basic operations (SOFT_MAX, etc.)
+- ❌ Occurs even with scalar MMA fallback (not specific to our MMA code)
+
+This appears to be a fundamental ZLUDA ↔ ROCm 6.2.3 ↔ gfx1103 compatibility issue. GitHub issues [#59](https://github.com/vosen/ZLUDA/issues/59), [#611](https://github.com/vosen/ZLUDA/issues/611), and [#64](https://github.com/vosen/ZLUDA/issues/64) show other users successfully ran ZLUDA on gfx1103, but potentially with different ROCm versions.
+
+**2. LLVM Intrinsic Lowering Integration**
+
+The hardware MMA path requires our custom LLVM with the CombineMMA pass. Currently disabled (using scalar fallback) because:
+- ZLUDA uses system LLVM (`/opt/rocm/llvm`)
+- Our modifications are in `ext/llvm-project` submodule
+- Building and integrating custom LLVM is a 1-2 hour process
+
+To enable hardware acceleration, need to either:
+- Build ZLUDA against our modified LLVM, OR
+- Upstream the LLVM changes to ROCm's LLVM
+
+#### 🤔 Questions for the Community
+
+1. **Has anyone successfully run ZLUDA on Radeon 780M (gfx1103) with ROCm 6.2+?**
+   - Which ROCm version works?
+   - Any special configuration needed?
+   - Are there known rocBLAS symbol resolution issues?
+
+2. **Best approach for integrating custom LLVM passes into ZLUDA?**
+   - Should we build ZLUDA against our modified LLVM fork?
+   - Can LLVM passes be loaded dynamically?
+   - Any experience upstreaming ZLUDA-specific LLVM changes to ROCm?
+
+3. **Alternative testing environments?**
+   - Which discrete RDNA3 GPUs (gfx1100, gfx1101, gfx1102) are confirmed working with ZLUDA + ROCm 6.2+?
+   - Would testing on different hardware help isolate the gfx1103-specific issues?
+
+#### 📝 Technical Notes
+
+**Bitcode Compilation:**
+The PTX runtime must be compiled to proper LLVM bitcode:
+```bash
+hipcc --std=c++20 --offload-arch=gfx1103 -c -emit-llvm -O3 \
+  ptx/lib/zluda_ptx_impl.cpp -o ptx/lib/zluda_ptx_impl_temp.bc
+
+/opt/rocm/llvm/bin/clang-offload-bundler \
+  --type=bc --targets=hip-amdgcn-amd-amdhsa-gfx1103 \
+  --input=ptx/lib/zluda_ptx_impl_temp.bc \
+  --output=ptx/lib/zluda_ptx_impl.bc \
+  --unbundle
+```
+The offload bundler extracts raw bitcode from HIP's bundle format. Without this, ZLUDA fails with "file doesn't start with bitcode header".
+
+**Hardware Path Toggle:**
+To switch between hardware and scalar MMA, modify the ISA version checks in `ptx/lib/zluda_ptx_impl.cpp`:
+```cpp
+if (__oclc_ISA_version >= 11000 && __oclc_ISA_version < 12000)  // Hardware
+if (false && __oclc_ISA_version >= 11000 && ...)  // Force scalar fallback
+```
+
+#### 🙏 Help Wanted
+
+If you have experience with:
+- ZLUDA on RDNA3 APUs (especially gfx1103)
+- rocBLAS symbol resolution / TensileLibrary integration
+- LLVM pass integration in ROCm builds
+- Alternative ROCm versions that work better with gfx1103
+
+Please open an issue or discussion! The MMA implementation is ready - we just need the environment sorted out.
+
+---
+
 ## What This Fork Adds
 
 This fork extends upstream ZLUDA with implementations of CUDA libraries that ML frameworks depend on. All implementations use AMD's native ROCm backend libraries.

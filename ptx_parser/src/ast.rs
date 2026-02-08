@@ -788,6 +788,19 @@ ptx_parser_macros::generate_instruction_type!(
                 }
             }
         },
+        MovMatrix {
+            type: { Type::Scalar(ScalarType::B32) },
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    relaxed_type_check: true,
+                },
+                src: {
+                    repr: T,
+                    relaxed_type_check: true,
+                }
+            }
+        },
         GridDepControl {
             data: crate::GridDepControlAction,
         },
