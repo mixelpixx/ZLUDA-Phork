@@ -6,13 +6,13 @@ ZLUDA is a drop-in replacement for CUDA on non-NVIDIA GPUs. It allows running un
 
 ---
 
-## 🚧 Current Development Status & Issues
+## [IN PROGRESS] Current Development Status & Issues
 
 ### Flash Attention MMA Implementation (In Progress)
 
 We've implemented hardware-accelerated m16n8k8 MMA (Matrix Multiply-Accumulate) support for RDNA3 GPUs to enable flash attention in llama.cpp and other ML workloads. **The implementation is functionally complete but currently blocked by environment compatibility issues.**
 
-#### ✅ What's Implemented
+#### [DONE] What's Implemented
 
 **Complete PTX to AMD GPU Pipeline:**
 1. **PTX Parser** (`ptx_parser/`) - Added `MovMatrix` instruction variant and parser rules for `movmatrix.sync.aligned`
@@ -28,7 +28,7 @@ We've implemented hardware-accelerated m16n8k8 MMA (Matrix Multiply-Accumulate) 
 - Bitcode compilation: Properly generates LLVM bitcode with hardware paths
 - Falls back to scalar implementation on older GPUs
 
-#### ❌ Current Blockers
+#### [BLOCKED] Current Blockers
 
 **1. ZLUDA/rocBLAS Symbol Resolution on gfx1103**
 ```
@@ -43,13 +43,13 @@ CUDA error: named symbol not found
 - Custom rocBLAS: Community-built gfx1103 libraries installed ([likelovewant/ROCmLibs-for-gfx1103-AMD780M-APU](https://github.com/likelovewant/ROCmLibs-for-gfx1103-AMD780M-APU))
 
 **What Works:**
-- ✅ ZLUDA detects GPU correctly (`AMD Radeon Graphics [ZLUDA], compute capability 8.8`)
-- ✅ Bitcode loads without errors
-- ✅ gfx1103 TensileLibrary files present (`/opt/rocm/lib/rocblas/library/*gfx1103*`)
+- [OK] ZLUDA detects GPU correctly (`AMD Radeon Graphics [ZLUDA], compute capability 8.8`)
+- [OK] Bitcode loads without errors
+- [OK] gfx1103 TensileLibrary files present (`/opt/rocm/lib/rocblas/library/*gfx1103*`)
 
 **What Fails:**
-- ❌ rocBLAS kernel symbol resolution during basic operations (SOFT_MAX, etc.)
-- ❌ Occurs even with scalar MMA fallback (not specific to our MMA code)
+- [FAIL] rocBLAS kernel symbol resolution during basic operations (SOFT_MAX, etc.)
+- [FAIL] Occurs even with scalar MMA fallback (not specific to our MMA code)
 
 This appears to be a fundamental ZLUDA ↔ ROCm 6.2.3 ↔ gfx1103 compatibility issue. GitHub issues [#59](https://github.com/vosen/ZLUDA/issues/59), [#611](https://github.com/vosen/ZLUDA/issues/611), and [#64](https://github.com/vosen/ZLUDA/issues/64) show other users successfully ran ZLUDA on gfx1103, but potentially with different ROCm versions.
 
@@ -64,7 +64,7 @@ To enable hardware acceleration, need to either:
 - Build ZLUDA against our modified LLVM, OR
 - Upstream the LLVM changes to ROCm's LLVM
 
-#### 🤔 Questions for the Community
+#### Questions for the Community
 
 1. **Has anyone successfully run ZLUDA on Radeon 780M (gfx1103) with ROCm 6.2+?**
    - Which ROCm version works?
@@ -80,7 +80,7 @@ To enable hardware acceleration, need to either:
    - Which discrete RDNA3 GPUs (gfx1100, gfx1101, gfx1102) are confirmed working with ZLUDA + ROCm 6.2+?
    - Would testing on different hardware help isolate the gfx1103-specific issues?
 
-#### 📝 Technical Notes
+#### Technical Notes
 
 **Bitcode Compilation:**
 The PTX runtime must be compiled to proper LLVM bitcode:
@@ -103,7 +103,7 @@ if (__oclc_ISA_version >= 11000 && __oclc_ISA_version < 12000)  // Hardware
 if (false && __oclc_ISA_version >= 11000 && ...)  // Force scalar fallback
 ```
 
-#### 🙏 Help Wanted
+#### Help Wanted
 
 If you have experience with:
 - ZLUDA on RDNA3 APUs (especially gfx1103)
